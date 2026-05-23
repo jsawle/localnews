@@ -20,6 +20,9 @@
   <!-- SheetJS for xlsx/csv -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
+  <!-- compromise.js for in-browser NER -->
+  <script src="https://unpkg.com/compromise@14.14.0/builds/compromise.min.js"></script>
+
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
     .leaflet-container { font-family: inherit; }
@@ -31,96 +34,107 @@
   <script type="text/babel" data-type="module">
     const { useState, useRef, useEffect, useMemo } = React;
 
-    // ============ Helpers ============
+    // ============ Place extraction (no API, no key) ============
 
-    const LS_KEY = "news_geoparser_api_key";
+    const PLACE_BLOCKLIST = new Set([
+      "advertisement", "advertisements", "more", "news", "page", "today",
+      "yesterday", "tomorrow", "monday", "tuesday", "wednesday", "thursday",
+      "friday", "saturday", "sunday", "january", "february", "march", "april",
+      "may", "june", "july", "august", "september", "october", "november",
+      "december", "newsletter", "edit", "preferences",
+    ]);
 
-    const getStoredKey = () => {
-      try { return localStorage.getItem(LS_KEY) || ""; } catch { return ""; }
-    };
-    const setStoredKey = (k) => {
-      try { localStorage.setItem(LS_KEY, k); } catch {}
-    };
+    const extractPlaces = (text, locationHint) => {
+      if (!text || !window.nlp) return { places: [], topics: [], summary: "" };
+      const doc = window.nlp(text);
+      const placeMatches = doc.places().out("array");
 
-    const stripJsonFences = (txt) => {
-      if (!txt) return txt;
-      return txt.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
-    };
+      const counts = new Map();
+      placeMatches.forEach((p) => {
+        const cleaned = p.trim().replace(/[.,;:!?"']$/, "").replace(/^['"]/, "");
+        if (!cleaned) return;
+        const lower = cleaned.toLowerCase();
+        if (PLACE_BLOCKLIST.has(lower)) return;
+        if (cleaned.length < 3) return;
+        if (cleaned === lower) return;
+        counts.set(cleaned, (counts.get(cleaned) || 0) + 1);
+      });
 
-    const callLLM = async (prompt, apiKey) => {
-      if (!apiKey) throw new Error("No API key. Paste your Google AI Studio key above.");
-      const model = "gemini-2.0-flash";
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-      const body = {
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 2048,
-          responseMimeType: "application/json",
-        },
-      };
-      let response;
-      try {
-        response = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-      } catch (e) {
-        throw new Error(`Network error: ${e.message}`);
+      const positions = new Map();
+      for (const [place] of counts) {
+        const idx = text.toLowerCase().indexOf(place.toLowerCase());
+        positions.set(place, idx);
       }
-      if (!response.ok) {
-        let errBody = "";
-        try { errBody = await response.text(); } catch {}
-        throw new Error(`Gemini API ${response.status}: ${errBody.slice(0, 300) || response.statusText}`);
-      }
-      const data = await response.json();
-      if (data?.promptFeedback?.blockReason) {
-        throw new Error(`Blocked by safety filter: ${data.promptFeedback.blockReason}`);
-      }
-      const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).filter(Boolean).join("\n");
-      if (!text) {
-        throw new Error(`Unexpected response shape: ${JSON.stringify(data).slice(0, 200)}`);
-      }
-      return text;
-    };
 
-    const geoparseWithLLM = async (text, sourceLabel, apiKey) => {
-      const truncated = text.slice(0, 12000);
-      const prompt = `Extract place mentions from this news article. Return ONLY valid JSON, no markdown, no commentary.
+      const textLen = text.length || 1;
+      const scored = Array.from(counts.entries()).map(([place, count]) => {
+        const pos = positions.get(place) ?? textLen;
+        const positionScore = 1 - (pos / textLen);
+        const score = count * (1 + positionScore);
+        return { name: place, count, firstPos: pos, score };
+      });
 
-Schema:
-{
-  "summary": "one sentence, max 25 words",
-  "topics": ["1-5 short tags"],
-  "sentiment": "positive|neutral|negative|mixed",
-  "primary_location": "canonical name of place article is most about",
-  "places": [
-    {
-      "name": "as in text",
-      "canonical": "standardized name for geocoding e.g. 'Brooklyn, New York, USA'",
-      "type": "neighborhood|city|county|state|country|landmark|address|region",
-      "relevance": "primary|secondary|incidental",
-      "context": "short quote max 15 words"
-    }
-  ]
-}
+      scored.sort((a, b) => b.score - a.score);
 
-${sourceLabel ? `Source: ${sourceLabel}\n` : ""}Article:
-${truncated}`;
+      const places = scored.map((p, i) => {
+        let relevance;
+        if (i === 0 && p.count >= 2) relevance = "primary";
+        else if (i < 3 || p.count >= 3) relevance = "secondary";
+        else relevance = "incidental";
 
-      const raw = await callLLM(prompt, apiKey);
-      const cleaned = stripJsonFences(raw);
-      try {
-        return JSON.parse(cleaned);
-      } catch {
-        const match = cleaned.match(/\{[\s\S]*\}/);
-        if (match) {
-          try { return JSON.parse(match[0]); } catch {}
+        const lowerText = text.toLowerCase();
+        const idx = lowerText.indexOf(p.name.toLowerCase());
+        let context = "";
+        if (idx !== -1) {
+          const start = Math.max(0, text.lastIndexOf(".", idx) + 1);
+          const endDot = text.indexOf(".", idx);
+          const end = endDot === -1 ? Math.min(text.length, idx + 120) : endDot;
+          context = text.slice(start, end).trim().slice(0, 150);
         }
-        throw new Error(`Could not parse model output as JSON. First 200 chars: ${cleaned.slice(0, 200)}`);
-      }
+
+        let canonical = p.name;
+        if (locationHint && !p.name.toLowerCase().includes(locationHint.toLowerCase())) {
+          canonical = `${p.name}, ${locationHint}`;
+        }
+
+        return {
+          name: p.name,
+          canonical,
+          relevance,
+          context,
+          count: p.count,
+        };
+      });
+
+      const placeNamesLower = new Set(places.map((p) => p.name.toLowerCase()));
+      const nounMatches = doc.nouns().out("array");
+      const topicCounts = new Map();
+      nounMatches.forEach((n) => {
+        const cleaned = n.trim().replace(/[.,;:!?"']$/, "").toLowerCase();
+        if (!cleaned || cleaned.length < 4) return;
+        if (placeNamesLower.has(cleaned)) return;
+        if (PLACE_BLOCKLIST.has(cleaned)) return;
+        topicCounts.set(cleaned, (topicCounts.get(cleaned) || 0) + 1);
+      });
+      const topics = Array.from(topicCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([t]) => t);
+
+      const sentences = doc.sentences().out("array");
+      const summary = sentences[0] ? sentences[0].slice(0, 200) : "";
+
+      const primary = places.find((p) => p.relevance === "primary");
+
+      return {
+        places,
+        topics,
+        summary,
+        primary_location: primary ? primary.canonical : (places[0]?.canonical || ""),
+      };
     };
+
+    // ============ Geocoding (Nominatim, free, no key) ============
 
     const geocodePlace = async (query) => {
       const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
@@ -137,6 +151,8 @@ ${truncated}`;
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+    // ============ Export helpers ============
+
     const buildGeoJSON = (results) => {
       const features = [];
       results.forEach((doc, docIdx) => {
@@ -149,13 +165,12 @@ ${truncated}`;
               source: doc.source,
               place_name: p.name,
               canonical: p.canonical,
-              type: p.type,
               relevance: p.relevance,
+              mentions: p.count,
               context: p.context,
               osm_display_name: p.display_name,
               article_summary: doc.summary,
               topics: (doc.topics || []).join(", "),
-              sentiment: doc.sentiment,
               primary_location: doc.primary_location,
               doc_index: docIdx,
             },
@@ -167,15 +182,15 @@ ${truncated}`;
 
     const buildCSV = (results) => {
       const rows = [
-        ["source", "place_name", "canonical", "type", "relevance", "lat", "lon", "osm_display_name", "context", "article_summary", "topics", "sentiment", "primary_location"],
+        ["source", "place_name", "canonical", "relevance", "mentions", "lat", "lon", "osm_display_name", "context", "article_summary", "topics", "primary_location"],
       ];
       results.forEach((doc) => {
         doc.places.forEach((p) => {
           if (p.lat == null || p.lon == null) return;
           rows.push([
-            doc.source, p.name, p.canonical, p.type, p.relevance, p.lat, p.lon,
+            doc.source, p.name, p.canonical, p.relevance, p.count, p.lat, p.lon,
             p.display_name || "", p.context || "", doc.summary || "",
-            (doc.topics || []).join("; "), doc.sentiment || "", doc.primary_location || "",
+            (doc.topics || []).join("; "), doc.primary_location || "",
           ]);
         });
       });
@@ -200,7 +215,8 @@ ${truncated}`;
       URL.revokeObjectURL(url);
     };
 
-    // Spreadsheet parsing
+    // ============ Spreadsheet parsing ============
+
     const guessColumns = (headers) => {
       const lower = headers.map((h) => String(h || "").toLowerCase().trim());
       const findFirst = (candidates) => {
@@ -220,6 +236,7 @@ ${truncated}`;
         titleCol: findFirst(["title", "headline", "name"]),
         urlCol: findFirst(["original_url", "url", "link", "permalink", "redirect_url"]),
         dateCol: findFirst(["date", "published", "pubdate", "timestamp"]),
+        locationHintCol: findFirst(["location", "region", "city", "area"]),
       };
     };
 
@@ -281,12 +298,11 @@ ${truncated}`;
             const popupHTML = `
               <div style="max-width: 260px;">
                 <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">${escapeHTML(p.name)}</div>
-                <div style="color: #6b7280; font-size: 12px; margin-bottom: 6px;">${escapeHTML(p.type)} · ${escapeHTML(p.relevance)}</div>
+                <div style="color: #6b7280; font-size: 12px; margin-bottom: 6px;">${escapeHTML(p.relevance)} · ${p.count} mention${p.count !== 1 ? "s" : ""}</div>
                 ${p.context ? `<div style="font-style: italic; font-size: 12px; margin-bottom: 6px; color: #374151;">"${escapeHTML(p.context)}"</div>` : ""}
                 <div style="font-size: 11px; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 6px;">
                   <div><strong>Source:</strong> ${escapeHTML(doc.source)}</div>
                   ${doc.topics && doc.topics.length ? `<div><strong>Topics:</strong> ${escapeHTML(doc.topics.join(", "))}</div>` : ""}
-                  ${doc.sentiment ? `<div><strong>Sentiment:</strong> ${escapeHTML(doc.sentiment)}</div>` : ""}
                 </div>
               </div>`;
             marker.bindPopup(popupHTML);
@@ -322,18 +338,17 @@ ${truncated}`;
     // ============ Main App ============
 
     function App() {
-      const [apiKey, setApiKey] = useState(getStoredKey());
-      const [showKey, setShowKey] = useState(false);
       const [mode, setMode] = useState("text");
       const [textInput, setTextInput] = useState("");
       const [sourceLabel, setSourceLabel] = useState("");
+      const [locationHint, setLocationHint] = useState("");
       const [results, setResults] = useState([]);
-      const [progress, setProgress] = useState({ stage: null, current: 0, total: 0, articleIdx: 0, articleTotal: 0, articleLabel: "" });
+      const [progress, setProgress] = useState({ stage: null, articleIdx: 0, articleTotal: 0, articleLabel: "", current: 0, total: 0 });
       const [error, setError] = useState("");
-      const [filter, setFilter] = useState({ relevance: "all", topic: "all", source: "all" });
+      const [filter, setFilter] = useState({ relevance: "all", source: "all" });
 
       const [batchData, setBatchData] = useState(null);
-      const [batchCols, setBatchCols] = useState({ textCol: "", sourceCol: "", titleCol: "", urlCol: "", dateCol: "" });
+      const [batchCols, setBatchCols] = useState({ textCol: "", sourceCol: "", titleCol: "", urlCol: "", dateCol: "", locationHintCol: "" });
       const [batchRowLimit, setBatchRowLimit] = useState(10);
       const [skippedRows, setSkippedRows] = useState([]);
 
@@ -341,14 +356,6 @@ ${truncated}`;
       const batchFileInputRef = useRef(null);
 
       const isWorking = !!progress.stage;
-
-      useEffect(() => { setStoredKey(apiKey); }, [apiKey]);
-
-      const allTopics = useMemo(() => {
-        const set = new Set();
-        results.forEach((d) => (d.topics || []).forEach((t) => set.add(t)));
-        return Array.from(set).sort();
-      }, [results]);
 
       const allSources = useMemo(() => {
         const set = new Set();
@@ -362,7 +369,6 @@ ${truncated}`;
           .map((doc) => {
             let places = doc.places;
             if (filter.relevance !== "all") places = places.filter((p) => p.relevance === filter.relevance);
-            if (filter.topic !== "all" && !(doc.topics || []).includes(filter.topic)) places = [];
             return { ...doc, places };
           });
       }, [results, filter]);
@@ -396,18 +402,20 @@ ${truncated}`;
             titleCol: parsed.guess.titleCol || "",
             urlCol: parsed.guess.urlCol || "",
             dateCol: parsed.guess.dateCol || "",
+            locationHintCol: parsed.guess.locationHintCol || "",
           });
-          setBatchRowLimit(Math.min(10, parsed.rows.length));
+          setBatchRowLimit(Math.min(20, parsed.rows.length));
         } catch (e) {
           setError(`Could not read file: ${e.message}`);
         }
       };
 
-      const processOne = async ({ text, source }, articleIdx = 0, articleTotal = 1) => {
-        setProgress({ stage: "extracting", current: 0, total: 1, articleIdx, articleTotal, articleLabel: source });
-        const parsed = await geoparseWithLLM(text, source, apiKey);
+      const processOne = async ({ text, source, locationHintForRow }, articleIdx = 0, articleTotal = 1) => {
+        setProgress({ stage: "extracting", articleIdx, articleTotal, articleLabel: source, current: 0, total: 1 });
+        const parsed = extractPlaces(text, locationHintForRow || locationHint);
+
         const places = parsed.places || [];
-        setProgress({ stage: "geocoding", current: 0, total: places.length, articleIdx, articleTotal, articleLabel: source });
+        setProgress({ stage: "geocoding", articleIdx, articleTotal, articleLabel: source, current: 0, total: places.length });
 
         const canonicalMap = new Map();
         for (let i = 0; i < places.length; i++) {
@@ -421,7 +429,7 @@ ${truncated}`;
             } catch { canonicalMap.set(key, null); }
             await sleep(1100);
           }
-          setProgress({ stage: "geocoding", current: i + 1, total: places.length, articleIdx, articleTotal, articleLabel: source });
+          setProgress({ stage: "geocoding", articleIdx, articleTotal, articleLabel: source, current: i + 1, total: places.length });
         }
 
         const enriched = places.map((p) => {
@@ -435,7 +443,6 @@ ${truncated}`;
           source,
           summary: parsed.summary,
           topics: parsed.topics || [],
-          sentiment: parsed.sentiment,
           primary_location: parsed.primary_location,
           places: enriched,
         };
@@ -445,7 +452,6 @@ ${truncated}`;
         setError("");
         setResults([]);
         setSkippedRows([]);
-        if (!apiKey) { setError("Paste your Google AI Studio API key in the box above first."); return; }
         try {
           if (mode === "batch") {
             if (!batchData) { setError("Upload a spreadsheet first."); return; }
@@ -469,82 +475,50 @@ ${truncated}`;
                 else sourceParts.push(String(d));
               }
               const source = sourceParts.length ? sourceParts.join(" · ") : `Row ${i + 1}`;
+              const locationHintForRow = batchCols.locationHintCol && row[batchCols.locationHintCol] ? String(row[batchCols.locationHintCol]) : "";
               try {
-                const doc = await processOne({ text, source }, i + 1, rows.length);
+                const doc = await processOne({ text, source, locationHintForRow }, i + 1, rows.length);
                 if (batchCols.urlCol && row[batchCols.urlCol]) doc.url = String(row[batchCols.urlCol]);
                 collected.push(doc);
                 setResults([...collected]);
               } catch (e) {
-                const msg = e?.message || String(e);
-                skipped.push({ rowIndex: i + 1, reason: msg });
-                if (skipped.length >= 3 && collected.length === 0) {
-                  setSkippedRows([...skipped]);
-                  throw new Error(`Stopping after 3 consecutive failures. Most recent: ${msg}`);
-                }
+                skipped.push({ rowIndex: i + 1, reason: e?.message || String(e) });
               }
             }
             setSkippedRows(skipped);
-            setProgress({ stage: null, current: 0, total: 0, articleIdx: 0, articleTotal: 0, articleLabel: "" });
+            setProgress({ stage: null, articleIdx: 0, articleTotal: 0, articleLabel: "", current: 0, total: 0 });
             return;
           }
 
           if (!textInput.trim()) { setError("Paste some article text first."); return; }
-          const doc = await processOne({ text: textInput, source: sourceLabel || "pasted text" });
+          const doc = await processOne({ text: textInput, source: sourceLabel || "pasted text", locationHintForRow: locationHint });
           setResults([doc]);
-          setProgress({ stage: null, current: 0, total: 0, articleIdx: 0, articleTotal: 0, articleLabel: "" });
+          setProgress({ stage: null, articleIdx: 0, articleTotal: 0, articleLabel: "", current: 0, total: 0 });
         } catch (e) {
           setError(e.message || String(e));
-          setProgress({ stage: null, current: 0, total: 0, articleIdx: 0, articleTotal: 0, articleLabel: "" });
+          setProgress({ stage: null, articleIdx: 0, articleTotal: 0, articleLabel: "", current: 0, total: 0 });
         }
       };
 
       const stageLabel = {
-        extracting: "Extracting places with Gemini",
+        extracting: "Extracting places",
         geocoding: "Geocoding place names",
       };
 
       return (
         <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
           <div className="max-w-6xl mx-auto">
-            {/* Header */}
             <header className="mb-6">
               <div className="flex items-center gap-3 mb-1">
                 <div className="w-10 h-10 rounded-lg bg-slate-900 flex items-center justify-center text-white text-lg">🌍</div>
                 <h1 className="text-2xl font-bold text-slate-900">News Geoparser</h1>
               </div>
               <p className="text-slate-600 text-sm">
-                Extract place mentions from local news articles, map them, and export the data.
+                Extract place mentions from local news, map them, and export the data.
+                Runs entirely in your browser — no API keys, no cost.
               </p>
             </header>
 
-            {/* API key */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-slate-700">
-                  Google AI Studio API key
-                  {apiKey && <span className="ml-2 text-xs text-emerald-600">✓ saved in this browser</span>}
-                </label>
-                <button
-                  onClick={() => setShowKey(!showKey)}
-                  className="text-xs text-slate-500 hover:text-slate-700"
-                >
-                  {showKey ? "Hide" : "Show"}
-                </button>
-              </div>
-              <input
-                type={showKey ? "text" : "password"}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="AIza..."
-                className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-400"
-              />
-              <p className="text-xs text-slate-500 mt-2">
-                Stored only in your browser's localStorage. Never sent anywhere except generativelanguage.googleapis.com.
-                Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" className="text-blue-600 underline">aistudio.google.com</a> — no credit card needed for the free tier (1,500 requests/day on gemini-2.0-flash).
-              </p>
-            </div>
-
-            {/* Input panel */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-5">
               <div className="flex gap-1 mb-4 bg-slate-100 p-1 rounded-lg w-fit flex-wrap">
                 {[
@@ -563,6 +537,23 @@ ${truncated}`;
                     {label}
                   </button>
                 ))}
+              </div>
+
+              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <label className="block text-xs font-medium text-blue-900 mb-1">
+                  Location hint (optional but recommended)
+                </label>
+                <input
+                  type="text"
+                  value={locationHint}
+                  onChange={(e) => setLocationHint(e.target.value)}
+                  placeholder="e.g. 'UK' or 'Liverpool, UK' or 'Scotland'"
+                  className="w-full px-3 py-1.5 border border-blue-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  disabled={isWorking}
+                />
+                <p className="text-xs text-blue-700 mt-1">
+                  Helps disambiguate. "Manchester" alone is ambiguous; with hint "UK" it geocodes to Manchester, England rather than Manchester, NH.
+                </p>
               </div>
 
               {mode === "text" && (
@@ -636,7 +627,7 @@ ${truncated}`;
                           ✓ Loaded <strong>{batchData.rows.length}</strong> rows · {batchData.headers.length} columns
                         </div>
                         <button
-                          onClick={() => { setBatchData(null); setBatchCols({ textCol: "", sourceCol: "", titleCol: "", urlCol: "", dateCol: "" }); }}
+                          onClick={() => { setBatchData(null); setBatchCols({ textCol: "", sourceCol: "", titleCol: "", urlCol: "", dateCol: "", locationHintCol: "" }); }}
                           className="text-xs text-slate-600 hover:text-slate-900"
                           disabled={isWorking}
                         >
@@ -649,8 +640,9 @@ ${truncated}`;
                           { key: "textCol", label: "Article text column", required: true, help: "The full body of each article" },
                           { key: "sourceCol", label: "Source / outlet column", help: "Optional" },
                           { key: "titleCol", label: "Title / headline column", help: "Optional" },
-                          { key: "urlCol", label: "URL column", help: "Optional, stored as metadata" },
+                          { key: "urlCol", label: "URL column", help: "Optional metadata" },
                           { key: "dateCol", label: "Date column", help: "Optional" },
+                          { key: "locationHintCol", label: "Per-row location hint", help: "Optional, overrides global hint" },
                         ].map(({ key, label, required, help }) => (
                           <div key={key}>
                             <label className="block text-xs font-medium text-slate-700 mb-1">
@@ -679,7 +671,9 @@ ${truncated}`;
                             className="w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm"
                             disabled={isWorking}
                           />
-                          <p className="text-xs text-slate-500 mt-0.5">Max {batchData.rows.length}. ~30–60s per article.</p>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Max {batchData.rows.length}. Geocoding is ~1s per unique place.
+                          </p>
                         </div>
                       </div>
 
@@ -732,7 +726,6 @@ ${truncated}`;
               )}
             </div>
 
-            {/* Results */}
             {results.length > 0 && (
               <>
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-5">
@@ -772,19 +765,6 @@ ${truncated}`;
                         >{r}</button>
                       ))}
                     </div>
-                    {allTopics.length > 0 && (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-medium text-slate-600 uppercase tracking-wide">Topic:</span>
-                        <select
-                          value={filter.topic}
-                          onChange={(e) => setFilter({ ...filter, topic: e.target.value })}
-                          className="text-xs border border-slate-300 rounded-md px-2 py-1 bg-white"
-                        >
-                          <option value="all">All topics</option>
-                          {allTopics.map((t) => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                      </div>
-                    )}
                     {allSources.length > 1 && (
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-medium text-slate-600 uppercase tracking-wide">Article:</span>
@@ -811,18 +791,16 @@ ${truncated}`;
                     </div>
                     {doc.summary && (
                       <div className="mb-3">
-                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Summary</div>
-                        <div className="text-sm text-slate-800">{doc.summary}</div>
+                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">First sentence</div>
+                        <div className="text-sm text-slate-800 italic">{doc.summary}</div>
                       </div>
                     )}
-                    <div className="flex flex-wrap gap-3 mb-4 text-sm">
-                      {doc.primary_location && (
-                        <div><span className="text-slate-500">Primary location: </span><span className="font-medium">{doc.primary_location}</span></div>
-                      )}
-                      {doc.sentiment && (
-                        <div><span className="text-slate-500">Sentiment: </span><span className="font-medium capitalize">{doc.sentiment}</span></div>
-                      )}
-                    </div>
+                    {doc.primary_location && (
+                      <div className="text-sm mb-3">
+                        <span className="text-slate-500">Primary location: </span>
+                        <span className="font-medium">{doc.primary_location}</span>
+                      </div>
+                    )}
                     {doc.topics?.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mb-4">
                         {doc.topics.map((t) => (
@@ -837,7 +815,7 @@ ${truncated}`;
                           <thead className="bg-slate-50 sticky top-0">
                             <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
                               <th className="px-3 py-2 font-medium">Place</th>
-                              <th className="px-3 py-2 font-medium">Type</th>
+                              <th className="px-3 py-2 font-medium">Mentions</th>
                               <th className="px-3 py-2 font-medium">Relevance</th>
                               <th className="px-3 py-2 font-medium">Coords</th>
                               <th className="px-3 py-2 font-medium">Context</th>
@@ -852,7 +830,7 @@ ${truncated}`;
                                     <div className="text-xs text-slate-500">{p.canonical}</div>
                                   )}
                                 </td>
-                                <td className="px-3 py-2 align-top text-slate-600 text-xs capitalize">{p.type}</td>
+                                <td className="px-3 py-2 align-top text-slate-700">{p.count}</td>
                                 <td className="px-3 py-2 align-top">
                                   <span
                                     className="inline-block px-2 py-0.5 rounded-full text-xs font-medium text-white capitalize"
@@ -896,14 +874,14 @@ ${truncated}`;
                 <h3 className="text-sm font-medium text-slate-900 mb-1">No results yet</h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto">
                   Paste an article, upload a text file, or drop in a CSV/XLSX of multiple articles.
-                  Gemini extracts every place mention, Nominatim geocodes it, and the map shows the results.
+                  Places are extracted in your browser using NLP, then geocoded via OpenStreetMap.
                 </p>
               </div>
             )}
 
             <footer className="mt-8 text-center text-xs text-slate-500">
-              Geocoding by OpenStreetMap Nominatim. Map tiles © OpenStreetMap contributors.
-              Outputs (GeoJSON, CSV) are ready for import into ArcGIS Online or MapMaker.
+              Place extraction by compromise.js · Geocoding by OpenStreetMap Nominatim · Map tiles © OpenStreetMap contributors.
+              Outputs ready for ArcGIS Online or MapMaker.
             </footer>
           </div>
         </div>
