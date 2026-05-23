@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>News Geoparser</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- React + Babel (standalone, no build step) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- SheetJS for xlsx/csv -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+    .leaflet-container { font-family: inherit; }
+  </style>
+</head>
+<body class="bg-slate-50">
+  <div id="root"></div>
+
+  <script type="text/babel" data-type="module">
+    const { useState, useRef, useEffect, useMemo } = React;
+
+    // ============ Helpers ============
+
+    const LS_KEY = "news_geoparser_api_key";
+
+    const getStoredKey = () => {
+      try { return localStorage.getItem(LS_KEY) || ""; } catch { return ""; }
+    };
+    const setStoredKey = (k) => {
+      try { localStorage.setItem(LS_KEY, k); } catch {}
+    };
+
+    const stripJsonFences = (txt) => {
+      if (!txt) return txt;
+      return txt.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+    };
+
+    const callLLM = async (prompt, apiKey) => {
+      if (!apiKey) throw new Error("No API key. Paste your Google AI Studio key above.");
+      const model = "gemini-2.0-flash";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const body = {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 2048,
+          responseMimeType: "application/json",
+        },
+      };
+      let response;
+      try {
+        response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      } catch (e) {
+        throw new Error(`Network error: ${e.message}`);
+      }
+      if (!response.ok) {
+        let errBody = "";
+        try { errBody = await response.text(); } catch {}
+        throw new Error(`Gemini API ${response.status}: ${errBody.slice(0, 300) || response.statusText}`);
+      }
+      const data = await response.json();
+      if (data?.promptFeedback?.blockReason) {
+        throw new Error(`Blocked by safety filter: ${data.promptFeedback.blockReason}`);
+      }
+      const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).filter(Boolean).join("\n");
+      if (!text) {
+        throw new Error(`Unexpected response shape: ${JSON.stringify(data).slice(0, 200)}`);
+      }
+      return text;
+    };
+
+    const geoparseWithLLM = async (text, sourceLabel, apiKey) => {
+      const truncated = text.slice(0, 12000);
+      const prompt = `Extract place mentions from this news article. Return ONLY valid JSON, no markdown, no commentary.
+
+Schema:
+{
+  "summary": "one sentence, max 25 words",
+  "topics": ["1-5 short tags"],
+  "sentiment": "positive|neutral|negative|mixed",
+  "primary_location": "canonical name of place article is most about",
+  "places": [
+    {
+      "name": "as in text",
+      "canonical": "standardized name for geocoding e.g. 'Brooklyn, New York, USA'",
+      "type": "neighborhood|city|county|state|country|landmark|address|region",
+      "relevance": "primary|secondary|incidental",
+      "context": "short quote max 15 words"
+    }
+  ]
+}
+
+${sourceLabel ? `Source: ${sourceLabel}\n` : ""}Article:
+${truncated}`;
+
+      const raw = await callLLM(prompt, apiKey);
+      const cleaned = stripJsonFences(raw);
+      try {
+        return JSON.parse(cleaned);
+      } catch {
+        const match = cleaned.match(/\{[\s\S]*\}/);
+        if (match) {
+          try { return JSON.parse(match[0]); } catch {}
+        }
+        throw new Error(`Could not parse model output as JSON. First 200 chars: ${cleaned.slice(0, 200)}`);
+      }
+    };
+
+    const geocodePlace = async (query) => {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+      const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data || !data.length) return null;
+      return {
+        lat: parseFloat(data[0].lat),
+        lon: parseFloat(data[0].lon),
+        display_name: data[0].display_name,
+      };
+    };
+
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    const buildGeoJSON = (results) => {
+      const features = [];
+      results.forEach((doc, docIdx) => {
+        doc.places.forEach((p) => {
+          if (p.lat == null || p.lon == null) return;
+          features.push({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [p.lon, p.lat] },
+            properties: {
+              source: doc.source,
+              place_name: p.name,
+              canonical: p.canonical,
+              type: p.type,
+              relevance: p.relevance,
+              context: p.context,
+              osm_display_name: p.display_name,
+              article_summary: doc.summary,
+              topics: (doc.topics || []).join(", "),
+              sentiment: doc.sentiment,
+              primary_location: doc.primary_location,
+              doc_index: docIdx,
+            },
+          });
+        });
+      });
+      return { type: "FeatureCollection", features };
+    };
+
+    const buildCSV = (results) => {
+      const rows = [
+        ["source", "place_name", "canonical", "type", "relevance", "lat", "lon", "osm_display_name", "context", "article_summary", "topics", "sentiment", "primary_location"],
+      ];
+      results.forEach((doc) => {
+        doc.places.forEach((p) => {
+          if (p.lat == null || p.lon == null) return;
+          rows.push([
+            doc.source, p.name, p.canonical, p.type, p.relevance, p.lat, p.lon,
+            p.display_name || "", p.context || "", doc.summary || "",
+            (doc.topics || []).join("; "), doc.sentiment || "", doc.primary_location || "",
+          ]);
+        });
+      });
+      return rows.map((r) => r.map((c) => {
+        const s = String(c ?? "");
+        if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+          return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+      }).join(",")).join("\n");
+    };
+
+    const triggerDownload = (filename, content, mime) => {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    };
+
+    // Spreadsheet parsing
+    const guessColumns = (headers) => {
+      const lower = headers.map((h) => String(h || "").toLowerCase().trim());
+      const findFirst = (candidates) => {
+        for (const c of candidates) {
+          const idx = lower.findIndex((h) => h === c);
+          if (idx !== -1) return headers[idx];
+        }
+        for (const c of candidates) {
+          const idx = lower.findIndex((h) => h.includes(c));
+          if (idx !== -1) return headers[idx];
+        }
+        return null;
+      };
+      return {
+        textCol: findFirst(["body", "text", "content", "article_text", "fulltext", "article", "story"]),
+        sourceCol: findFirst(["outlet", "source", "publisher", "publication"]),
+        titleCol: findFirst(["title", "headline", "name"]),
+        urlCol: findFirst(["original_url", "url", "link", "permalink", "redirect_url"]),
+        dateCol: findFirst(["date", "published", "pubdate", "timestamp"]),
+      };
+    };
+
+    const parseSpreadsheet = async (file) => {
+      const ext = file.name.split(".").pop().toLowerCase();
+      const buf = await file.arrayBuffer();
+      let wb;
+      if (ext === "csv") {
+        const text = new TextDecoder().decode(buf);
+        wb = XLSX.read(text, { type: "string", cellDates: true });
+      } else {
+        wb = XLSX.read(buf, { type: "array", cellDates: true });
+      }
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      if (!rows.length) return { rows: [], headers: [], guess: {} };
+      const headers = Object.keys(rows[0]);
+      const guess = guessColumns(headers);
+      return { rows, headers, guess };
+    };
+
+    const escapeHTML = (s) => String(s ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+    // ============ Map component ============
+
+    const relevanceColor = {
+      primary: "#dc2626",
+      secondary: "#ea580c",
+      incidental: "#0891b2",
+    };
+
+    const NewsMap = ({ results }) => {
+      const mapRef = useRef(null);
+      const mapInstance = useRef(null);
+      const layerRef = useRef(null);
+
+      useEffect(() => {
+        if (!mapRef.current || !window.L) return;
+        if (!mapInstance.current) {
+          mapInstance.current = window.L.map(mapRef.current, { worldCopyJump: true }).setView([20, 0], 2);
+          window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19,
+          }).addTo(mapInstance.current);
+        }
+        if (layerRef.current) mapInstance.current.removeLayer(layerRef.current);
+        const group = window.L.featureGroup();
+
+        results.forEach((doc) => {
+          doc.places.forEach((p) => {
+            if (p.lat == null || p.lon == null) return;
+            const color = relevanceColor[p.relevance] || "#6b7280";
+            const radius = p.relevance === "primary" ? 9 : p.relevance === "secondary" ? 7 : 5;
+            const marker = window.L.circleMarker([p.lat, p.lon], {
+              radius, fillColor: color, color: "#fff", weight: 2, opacity: 1, fillOpacity: 0.85,
+            });
+            const popupHTML = `
+              <div style="max-width: 260px;">
+                <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">${escapeHTML(p.name)}</div>
+                <div style="color: #6b7280; font-size: 12px; margin-bottom: 6px;">${escapeHTML(p.type)} · ${escapeHTML(p.relevance)}</div>
+                ${p.context ? `<div style="font-style: italic; font-size: 12px; margin-bottom: 6px; color: #374151;">"${escapeHTML(p.context)}"</div>` : ""}
+                <div style="font-size: 11px; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 6px;">
+                  <div><strong>Source:</strong> ${escapeHTML(doc.source)}</div>
+                  ${doc.topics && doc.topics.length ? `<div><strong>Topics:</strong> ${escapeHTML(doc.topics.join(", "))}</div>` : ""}
+                  ${doc.sentiment ? `<div><strong>Sentiment:</strong> ${escapeHTML(doc.sentiment)}</div>` : ""}
+                </div>
+              </div>`;
+            marker.bindPopup(popupHTML);
+            marker.addTo(group);
+          });
+        });
+
+        if (group.getLayers().length > 0) {
+          group.addTo(mapInstance.current);
+          layerRef.current = group;
+          try {
+            mapInstance.current.fitBounds(group.getBounds(), { padding: [40, 40], maxZoom: 12 });
+          } catch {}
+        }
+      }, [results]);
+
+      return (
+        <div className="relative rounded-lg overflow-hidden border border-slate-300 bg-slate-100" style={{ height: 480 }}>
+          <div ref={mapRef} className="w-full h-full" />
+          <div className="absolute bottom-3 right-3 bg-white/95 backdrop-blur rounded-md shadow-md border border-slate-200 px-3 py-2 text-xs z-[1000]">
+            <div className="font-semibold text-slate-700 mb-1.5">Relevance</div>
+            {Object.entries(relevanceColor).map(([k, v]) => (
+              <div key={k} className="flex items-center gap-2 mb-0.5">
+                <span className="inline-block rounded-full" style={{ width: 10, height: 10, background: v }} />
+                <span className="capitalize text-slate-600">{k}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    // ============ Main App ============
+
+    function App() {
+      const [apiKey, setApiKey] = useState(getStoredKey());
+      const [showKey, setShowKey] = useState(false);
+      const [mode, setMode] = useState("text");
+      const [textInput, setTextInput] = useState("");
+      const [sourceLabel, setSourceLabel] = useState("");
+      const [results, setResults] = useState([]);
+      const [progress, setProgress] = useState({ stage: null, current: 0, total: 0, articleIdx: 0, articleTotal: 0, articleLabel: "" });
+      const [error, setError] = useState("");
+      const [filter, setFilter] = useState({ relevance: "all", topic: "all", source: "all" });
+
+      const [batchData, setBatchData] = useState(null);
+      const [batchCols, setBatchCols] = useState({ textCol: "", sourceCol: "", titleCol: "", urlCol: "", dateCol: "" });
+      const [batchRowLimit, setBatchRowLimit] = useState(10);
+      const [skippedRows, setSkippedRows] = useState([]);
+
+      const fileInputRef = useRef(null);
+      const batchFileInputRef = useRef(null);
+
+      const isWorking = !!progress.stage;
+
+      useEffect(() => { setStoredKey(apiKey); }, [apiKey]);
+
+      const allTopics = useMemo(() => {
+        const set = new Set();
+        results.forEach((d) => (d.topics || []).forEach((t) => set.add(t)));
+        return Array.from(set).sort();
+      }, [results]);
+
+      const allSources = useMemo(() => {
+        const set = new Set();
+        results.forEach((d) => set.add(d.source));
+        return Array.from(set).sort();
+      }, [results]);
+
+      const filteredResults = useMemo(() => {
+        return results
+          .filter((doc) => filter.source === "all" || doc.source === filter.source)
+          .map((doc) => {
+            let places = doc.places;
+            if (filter.relevance !== "all") places = places.filter((p) => p.relevance === filter.relevance);
+            if (filter.topic !== "all" && !(doc.topics || []).includes(filter.topic)) places = [];
+            return { ...doc, places };
+          });
+      }, [results, filter]);
+
+      const totalPlaces = useMemo(
+        () => results.reduce((acc, d) => acc + d.places.filter((p) => p.lat != null).length, 0),
+        [results]
+      );
+
+      const handleFile = (file) => {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setTextInput(e.target.result);
+          setSourceLabel(file.name);
+          setMode("text");
+        };
+        reader.readAsText(file);
+      };
+
+      const handleBatchFile = async (file) => {
+        if (!file) return;
+        setError("");
+        try {
+          const parsed = await parseSpreadsheet(file);
+          if (!parsed.rows.length) { setError("That file looks empty."); return; }
+          setBatchData(parsed);
+          setBatchCols({
+            textCol: parsed.guess.textCol || "",
+            sourceCol: parsed.guess.sourceCol || "",
+            titleCol: parsed.guess.titleCol || "",
+            urlCol: parsed.guess.urlCol || "",
+            dateCol: parsed.guess.dateCol || "",
+          });
+          setBatchRowLimit(Math.min(10, parsed.rows.length));
+        } catch (e) {
+          setError(`Could not read file: ${e.message}`);
+        }
+      };
+
+      const processOne = async ({ text, source }, articleIdx = 0, articleTotal = 1) => {
+        setProgress({ stage: "extracting", current: 0, total: 1, articleIdx, articleTotal, articleLabel: source });
+        const parsed = await geoparseWithLLM(text, source, apiKey);
+        const places = parsed.places || [];
+        setProgress({ stage: "geocoding", current: 0, total: places.length, articleIdx, articleTotal, articleLabel: source });
+
+        const canonicalMap = new Map();
+        for (let i = 0; i < places.length; i++) {
+          const p = places[i];
+          const key = (p.canonical || p.name || "").toLowerCase();
+          if (!key) continue;
+          if (!canonicalMap.has(key)) {
+            try {
+              const geo = await geocodePlace(p.canonical || p.name);
+              canonicalMap.set(key, geo);
+            } catch { canonicalMap.set(key, null); }
+            await sleep(1100);
+          }
+          setProgress({ stage: "geocoding", current: i + 1, total: places.length, articleIdx, articleTotal, articleLabel: source });
+        }
+
+        const enriched = places.map((p) => {
+          const key = (p.canonical || p.name || "").toLowerCase();
+          const geo = canonicalMap.get(key);
+          if (!geo) return { ...p, lat: null, lon: null };
+          return { ...p, lat: geo.lat, lon: geo.lon, display_name: geo.display_name };
+        });
+
+        return {
+          source,
+          summary: parsed.summary,
+          topics: parsed.topics || [],
+          sentiment: parsed.sentiment,
+          primary_location: parsed.primary_location,
+          places: enriched,
+        };
+      };
+
+      const runAnalysis = async () => {
+        setError("");
+        setResults([]);
+        setSkippedRows([]);
+        if (!apiKey) { setError("Paste your Google AI Studio API key in the box above first."); return; }
+        try {
+          if (mode === "batch") {
+            if (!batchData) { setError("Upload a spreadsheet first."); return; }
+            if (!batchCols.textCol) { setError("Pick which column contains the article text."); return; }
+            const rows = batchData.rows.slice(0, batchRowLimit);
+            const collected = [];
+            const skipped = [];
+            for (let i = 0; i < rows.length; i++) {
+              const row = rows[i];
+              const text = String(row[batchCols.textCol] || "").trim();
+              if (!text || text.length < 50) {
+                skipped.push({ rowIndex: i + 1, reason: "Empty or too short" });
+                continue;
+              }
+              const sourceParts = [];
+              if (batchCols.sourceCol && row[batchCols.sourceCol]) sourceParts.push(String(row[batchCols.sourceCol]));
+              if (batchCols.titleCol && row[batchCols.titleCol]) sourceParts.push(String(row[batchCols.titleCol]));
+              if (batchCols.dateCol && row[batchCols.dateCol]) {
+                const d = row[batchCols.dateCol];
+                if (d instanceof Date && !isNaN(d)) sourceParts.push(d.toISOString().slice(0, 10));
+                else sourceParts.push(String(d));
+              }
+              const source = sourceParts.length ? sourceParts.join(" · ") : `Row ${i + 1}`;
+              try {
+                const doc = await processOne({ text, source }, i + 1, rows.length);
+                if (batchCols.urlCol && row[batchCols.urlCol]) doc.url = String(row[batchCols.urlCol]);
+                collected.push(doc);
+                setResults([...collected]);
+              } catch (e) {
+                const msg = e?.message || String(e);
+                skipped.push({ rowIndex: i + 1, reason: msg });
+                if (skipped.length >= 3 && collected.length === 0) {
+                  setSkippedRows([...skipped]);
+                  throw new Error(`Stopping after 3 consecutive failures. Most recent: ${msg}`);
+                }
+              }
+            }
+            setSkippedRows(skipped);
+            setProgress({ stage: null, current: 0, total: 0, articleIdx: 0, articleTotal: 0, articleLabel: "" });
+            return;
+          }
+
+          if (!textInput.trim()) { setError("Paste some article text first."); return; }
+          const doc = await processOne({ text: textInput, source: sourceLabel || "pasted text" });
+          setResults([doc]);
+          setProgress({ stage: null, current: 0, total: 0, articleIdx: 0, articleTotal: 0, articleLabel: "" });
+        } catch (e) {
+          setError(e.message || String(e));
+          setProgress({ stage: null, current: 0, total: 0, articleIdx: 0, articleTotal: 0, articleLabel: "" });
+        }
+      };
+
+      const stageLabel = {
+        extracting: "Extracting places with Gemini",
+        geocoding: "Geocoding place names",
+      };
+
+      return (
+        <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
+          <div className="max-w-6xl mx-auto">
+            {/* Header */}
+            <header className="mb-6">
+              <div className="flex items-center gap-3 mb-1">
+                <div className="w-10 h-10 rounded-lg bg-slate-900 flex items-center justify-center text-white text-lg">🌍</div>
+                <h1 className="text-2xl font-bold text-slate-900">News Geoparser</h1>
+              </div>
+              <p className="text-slate-600 text-sm">
+                Extract place mentions from local news articles, map them, and export the data.
+              </p>
+            </header>
+
+            {/* API key */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-slate-700">
+                  Google AI Studio API key
+                  {apiKey && <span className="ml-2 text-xs text-emerald-600">✓ saved in this browser</span>}
+                </label>
+                <button
+                  onClick={() => setShowKey(!showKey)}
+                  className="text-xs text-slate-500 hover:text-slate-700"
+                >
+                  {showKey ? "Hide" : "Show"}
+                </button>
+              </div>
+              <input
+                type={showKey ? "text" : "password"}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="AIza..."
+                className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-400"
+              />
+              <p className="text-xs text-slate-500 mt-2">
+                Stored only in your browser's localStorage. Never sent anywhere except generativelanguage.googleapis.com.
+                Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" className="text-blue-600 underline">aistudio.google.com</a> — no credit card needed for the free tier (1,500 requests/day on gemini-2.0-flash).
+              </p>
+            </div>
+
+            {/* Input panel */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-5">
+              <div className="flex gap-1 mb-4 bg-slate-100 p-1 rounded-lg w-fit flex-wrap">
+                {[
+                  { id: "text", label: "Paste text" },
+                  { id: "file", label: "Single file" },
+                  { id: "batch", label: "Spreadsheet (batch)" },
+                ].map(({ id, label }) => (
+                  <button
+                    key={id}
+                    onClick={() => setMode(id)}
+                    disabled={isWorking}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      mode === id ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {mode === "text" && (
+                <div>
+                  <input
+                    type="text"
+                    value={sourceLabel}
+                    onChange={(e) => setSourceLabel(e.target.value)}
+                    placeholder="Source label (optional)"
+                    className="w-full mb-2 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    disabled={isWorking}
+                  />
+                  <textarea
+                    value={textInput}
+                    onChange={(e) => setTextInput(e.target.value)}
+                    placeholder="Paste the article text here..."
+                    disabled={isWorking}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-400 resize-y"
+                    rows={8}
+                  />
+                </div>
+              )}
+
+              {mode === "file" && (
+                <div
+                  onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleFile(f); }}
+                  onDragOver={(e) => e.preventDefault()}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center cursor-pointer hover:bg-slate-50 hover:border-slate-400 transition-colors"
+                >
+                  <div className="text-3xl mb-2">📄</div>
+                  <p className="text-sm text-slate-600 font-medium">Drop a .txt or .md file here</p>
+                  <p className="text-xs text-slate-500 mt-1">or click to browse</p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".txt,.md,.text"
+                    className="hidden"
+                    onChange={(e) => handleFile(e.target.files?.[0])}
+                  />
+                </div>
+              )}
+
+              {mode === "batch" && (
+                <div>
+                  {!batchData ? (
+                    <div
+                      onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleBatchFile(f); }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onClick={() => batchFileInputRef.current?.click()}
+                      className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center cursor-pointer hover:bg-slate-50 hover:border-slate-400 transition-colors"
+                    >
+                      <div className="text-3xl mb-2">📊</div>
+                      <p className="text-sm text-slate-600 font-medium">Drop a .csv or .xlsx file here</p>
+                      <p className="text-xs text-slate-500 mt-1">or click to browse</p>
+                      <p className="text-xs text-slate-400 mt-3 max-w-md mx-auto">
+                        One row per article. Auto-detects text, source, title, URL and date columns.
+                      </p>
+                      <input
+                        ref={batchFileInputRef}
+                        type="file"
+                        accept=".csv,.xlsx,.xls"
+                        className="hidden"
+                        onChange={(e) => handleBatchFile(e.target.files?.[0])}
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-center justify-between mb-3 p-3 bg-emerald-50 border border-emerald-200 rounded-md">
+                        <div className="text-sm text-emerald-900">
+                          ✓ Loaded <strong>{batchData.rows.length}</strong> rows · {batchData.headers.length} columns
+                        </div>
+                        <button
+                          onClick={() => { setBatchData(null); setBatchCols({ textCol: "", sourceCol: "", titleCol: "", urlCol: "", dateCol: "" }); }}
+                          className="text-xs text-slate-600 hover:text-slate-900"
+                          disabled={isWorking}
+                        >
+                          Change file
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+                        {[
+                          { key: "textCol", label: "Article text column", required: true, help: "The full body of each article" },
+                          { key: "sourceCol", label: "Source / outlet column", help: "Optional" },
+                          { key: "titleCol", label: "Title / headline column", help: "Optional" },
+                          { key: "urlCol", label: "URL column", help: "Optional, stored as metadata" },
+                          { key: "dateCol", label: "Date column", help: "Optional" },
+                        ].map(({ key, label, required, help }) => (
+                          <div key={key}>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">
+                              {label} {required && <span className="text-red-500">*</span>}
+                            </label>
+                            <select
+                              value={batchCols[key]}
+                              onChange={(e) => setBatchCols({ ...batchCols, [key]: e.target.value })}
+                              className="w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm bg-white"
+                              disabled={isWorking}
+                            >
+                              <option value="">— none —</option>
+                              {batchData.headers.map((h) => <option key={h} value={h}>{h}</option>)}
+                            </select>
+                            <p className="text-xs text-slate-500 mt-0.5">{help}</p>
+                          </div>
+                        ))}
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Rows to process</label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={batchData.rows.length}
+                            value={batchRowLimit}
+                            onChange={(e) => setBatchRowLimit(Math.max(1, Math.min(batchData.rows.length, parseInt(e.target.value) || 1)))}
+                            className="w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm"
+                            disabled={isWorking}
+                          />
+                          <p className="text-xs text-slate-500 mt-0.5">Max {batchData.rows.length}. ~30–60s per article.</p>
+                        </div>
+                      </div>
+
+                      {batchCols.textCol && batchData.rows[0] && (
+                        <div className="border border-slate-200 rounded-md p-3 bg-slate-50">
+                          <div className="text-xs font-medium text-slate-600 uppercase tracking-wide mb-1">Preview of row 1</div>
+                          <div className="text-xs text-slate-700">
+                            {String(batchData.rows[0][batchCols.textCol] || "").slice(0, 300)}
+                            {String(batchData.rows[0][batchCols.textCol] || "").length > 300 ? "…" : ""}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="mt-4 flex items-center gap-3 flex-wrap">
+                <button
+                  onClick={runAnalysis}
+                  disabled={isWorking}
+                  className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white px-4 py-2 rounded-md text-sm font-medium"
+                >
+                  {isWorking ? "⏳ Working..." : (mode === "batch" ? `Geoparse ${batchRowLimit || 0} articles` : "Geoparse")}
+                </button>
+                {isWorking && progress.stage && (
+                  <div className="text-sm text-slate-600 flex-1 min-w-0">
+                    {progress.articleTotal > 1 && (
+                      <div className="text-xs text-slate-500 mb-0.5">
+                        Article {progress.articleIdx} of {progress.articleTotal}
+                        {progress.articleLabel && <span className="ml-1">· {progress.articleLabel}</span>}
+                      </div>
+                    )}
+                    <div>
+                      {stageLabel[progress.stage]}
+                      {progress.stage === "geocoding" && progress.total > 0 && (
+                        <span className="ml-1 text-slate-500">({progress.current}/{progress.total})</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {error && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-800 flex items-start gap-2">
+                  <span>⚠️</span>
+                  <div className="flex-1">{error}</div>
+                  <button onClick={() => setError("")}>✕</button>
+                </div>
+              )}
+            </div>
+
+            {/* Results */}
+            {results.length > 0 && (
+              <>
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <div>
+                      <h2 className="text-lg font-semibold text-slate-900">Results</h2>
+                      <p className="text-sm text-slate-600">
+                        {results.length} article{results.length !== 1 ? "s" : ""} · {totalPlaces} mapped place{totalPlaces !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => triggerDownload("news_places.geojson", JSON.stringify(buildGeoJSON(results), null, 2), "application/geo+json")}
+                        className="px-3 py-1.5 border border-slate-300 hover:bg-slate-50 rounded-md text-sm font-medium text-slate-700"
+                      >⬇ GeoJSON</button>
+                      <button
+                        onClick={() => triggerDownload("news_places.csv", buildCSV(results), "text/csv")}
+                        className="px-3 py-1.5 border border-slate-300 hover:bg-slate-50 rounded-md text-sm font-medium text-slate-700"
+                      >⬇ CSV</button>
+                      <button
+                        onClick={() => triggerDownload("news_places.json", JSON.stringify(results, null, 2), "application/json")}
+                        className="px-3 py-1.5 border border-slate-300 hover:bg-slate-50 rounded-md text-sm font-medium text-slate-700"
+                      >⬇ Raw JSON</button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 pb-4 mb-4 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-slate-600 uppercase tracking-wide">Relevance:</span>
+                      {["all", "primary", "secondary", "incidental"].map((r) => (
+                        <button
+                          key={r}
+                          onClick={() => setFilter({ ...filter, relevance: r })}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                            filter.relevance === r ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-300 hover:border-slate-400"
+                          }`}
+                        >{r}</button>
+                      ))}
+                    </div>
+                    {allTopics.length > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-medium text-slate-600 uppercase tracking-wide">Topic:</span>
+                        <select
+                          value={filter.topic}
+                          onChange={(e) => setFilter({ ...filter, topic: e.target.value })}
+                          className="text-xs border border-slate-300 rounded-md px-2 py-1 bg-white"
+                        >
+                          <option value="all">All topics</option>
+                          {allTopics.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                    )}
+                    {allSources.length > 1 && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-medium text-slate-600 uppercase tracking-wide">Article:</span>
+                        <select
+                          value={filter.source}
+                          onChange={(e) => setFilter({ ...filter, source: e.target.value })}
+                          className="text-xs border border-slate-300 rounded-md px-2 py-1 bg-white max-w-xs"
+                        >
+                          <option value="all">All {allSources.length} articles</option>
+                          {allSources.map((s) => <option key={s} value={s}>{s.length > 50 ? s.slice(0, 50) + "…" : s}</option>)}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  <NewsMap results={filteredResults} />
+                </div>
+
+                {results.map((doc, idx) => (
+                  <div key={idx} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-5">
+                    <div className="mb-3">
+                      <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Source</div>
+                      <div className="text-sm font-medium text-slate-900 break-words">{doc.source}</div>
+                    </div>
+                    {doc.summary && (
+                      <div className="mb-3">
+                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Summary</div>
+                        <div className="text-sm text-slate-800">{doc.summary}</div>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-3 mb-4 text-sm">
+                      {doc.primary_location && (
+                        <div><span className="text-slate-500">Primary location: </span><span className="font-medium">{doc.primary_location}</span></div>
+                      )}
+                      {doc.sentiment && (
+                        <div><span className="text-slate-500">Sentiment: </span><span className="font-medium capitalize">{doc.sentiment}</span></div>
+                      )}
+                    </div>
+                    {doc.topics?.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-4">
+                        {doc.topics.map((t) => (
+                          <span key={t} className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-full text-xs">{t}</span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                      <div className="max-h-96 overflow-y-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-slate-50 sticky top-0">
+                            <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+                              <th className="px-3 py-2 font-medium">Place</th>
+                              <th className="px-3 py-2 font-medium">Type</th>
+                              <th className="px-3 py-2 font-medium">Relevance</th>
+                              <th className="px-3 py-2 font-medium">Coords</th>
+                              <th className="px-3 py-2 font-medium">Context</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {doc.places.map((p, i) => (
+                              <tr key={i} className="hover:bg-slate-50">
+                                <td className="px-3 py-2 align-top">
+                                  <div className="font-medium text-slate-900">{p.name}</div>
+                                  {p.canonical && p.canonical !== p.name && (
+                                    <div className="text-xs text-slate-500">{p.canonical}</div>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 align-top text-slate-600 text-xs capitalize">{p.type}</td>
+                                <td className="px-3 py-2 align-top">
+                                  <span
+                                    className="inline-block px-2 py-0.5 rounded-full text-xs font-medium text-white capitalize"
+                                    style={{ background: relevanceColor[p.relevance] || "#6b7280" }}
+                                  >{p.relevance}</span>
+                                </td>
+                                <td className="px-3 py-2 align-top text-xs font-mono text-slate-600">
+                                  {p.lat != null ? `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}` : <span className="text-amber-600">not found</span>}
+                                </td>
+                                <td className="px-3 py-2 align-top text-xs text-slate-600 italic max-w-xs">
+                                  {p.context && `"${p.context}"`}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {skippedRows.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
+                <div className="text-sm font-medium text-amber-900 mb-2">
+                  Skipped {skippedRows.length} row{skippedRows.length !== 1 ? "s" : ""}
+                </div>
+                <div className="text-xs text-amber-800 max-h-32 overflow-y-auto">
+                  {skippedRows.slice(0, 20).map((s, i) => (
+                    <div key={i} className="mb-0.5">Row {s.rowIndex}: {s.reason}</div>
+                  ))}
+                  {skippedRows.length > 20 && <div className="italic">…and {skippedRows.length - 20} more</div>}
+                </div>
+              </div>
+            )}
+
+            {results.length === 0 && !isWorking && (
+              <div className="bg-white rounded-xl border border-dashed border-slate-300 p-10 text-center">
+                <div className="text-4xl mb-3">📍</div>
+                <h3 className="text-sm font-medium text-slate-900 mb-1">No results yet</h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  Paste an article, upload a text file, or drop in a CSV/XLSX of multiple articles.
+                  Gemini extracts every place mention, Nominatim geocodes it, and the map shows the results.
+                </p>
+              </div>
+            )}
+
+            <footer className="mt-8 text-center text-xs text-slate-500">
+              Geocoding by OpenStreetMap Nominatim. Map tiles © OpenStreetMap contributors.
+              Outputs (GeoJSON, CSV) are ready for import into ArcGIS Online or MapMaker.
+            </footer>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
