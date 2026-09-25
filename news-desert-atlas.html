@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>UK News Desert Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,650&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#F2F4F3; --panel:#FFFFFF; --ink:#18252B; --muted:#5A6B70; --line:#D5DDDA;
+  --land:#DCE3E0; --land-edge:#B9C6C1; --land-other:#E9EDEB; --sea:#F2F4F3;
+  --accent:#0B5E6B;
+  --l-mill:#C2410C; --l-nub:#1D4ED8; --l-indie:#0F766E; --l-letter:#7C3AED; --l-desert:#B91C1C; --l-import:#A16207;
+  --chip:#E8EEEC; --focus:#0B5E6B;
+  --serif:"Newsreader", Georgia, "Times New Roman", serif;
+  --sans:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ground:#0F1719; --panel:#162124; --ink:#E4ECEA; --muted:#98AAA7; --line:#2A393C;
+    --land:#23353A; --land-edge:#3A5157; --land-other:#1B2A2E; --sea:#0F1719;
+    --accent:#5CC6D3;
+    --l-mill:#FB8A4C; --l-nub:#7AA2FF; --l-indie:#3CCBB6; --l-letter:#B69AFB; --l-desert:#F87171; --l-import:#E5B64A;
+    --chip:#1F2E31; --focus:#5CC6D3;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#0F1719; --panel:#162124; --ink:#E4ECEA; --muted:#98AAA7; --line:#2A393C;
+  --land:#23353A; --land-edge:#3A5157; --land-other:#1B2A2E; --sea:#0F1719;
+  --accent:#5CC6D3;
+  --l-mill:#FB8A4C; --l-nub:#7AA2FF; --l-indie:#3CCBB6; --l-letter:#B69AFB; --l-desert:#F87171; --l-import:#E5B64A;
+  --chip:#1F2E31; --focus:#5CC6D3;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font:15px/1.5 var(--sans);}
+.wrap{max-width:1240px;margin:0 auto;padding-inline:20px;padding-block:20px 48px}
+h1,h2,h3{font-family:var(--serif);font-weight:650;text-wrap:balance;margin:0}
+h1{font-size:clamp(28px,4vw,40px);line-height:1.1;letter-spacing:-.01em}
+h2{font-size:22px;line-height:1.2}
+h3{font-size:17px;line-height:1.3}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.mono{font-family:var(--mono)}
+.eyebrow{font:500 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+header.top p{margin:6px 0 0;color:var(--muted);max-width:62ch}
+.ver{font:500 12px var(--mono);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:4px 8px;white-space:nowrap}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin:18px 0}
+.stat{background:var(--panel);padding:12px 14px}
+.stat b{display:block;font:600 24px/1.1 var(--serif);font-variant-numeric:tabular-nums}
+.stat span{font-size:12.5px;color:var(--muted);line-height:1.35;display:block;margin-top:4px}
+nav.tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px}
+nav.tabs button{font:500 14px var(--sans);color:var(--muted);background:none;border:1px solid transparent;border-radius:5px;padding:7px 14px;cursor:pointer}
+nav.tabs button[aria-selected="true"]{color:var(--ink);background:var(--panel);border-color:var(--line)}
+nav.tabs button:hover{color:var(--ink)}
+.grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px}
+.mapbox{position:relative;overflow:hidden;touch-action:none}
+.mapbox svg{display:block;width:100%;height:auto;max-height:78vh;cursor:grab;user-select:none}
+.mapbox svg.dragging{cursor:grabbing}
+.land{fill:var(--land);stroke:var(--land-edge);stroke-width:1;vector-effect:non-scaling-stroke}
+.land.other{fill:var(--land-other)}
+.grat{stroke:var(--line);stroke-width:.6;fill:none;vector-effect:non-scaling-stroke;stroke-dasharray:2 4}
+.gratlbl{font:10px var(--mono);fill:var(--muted)}
+.pt{cursor:pointer}
+.pt circle{stroke:var(--panel);stroke-width:1.5;vector-effect:non-scaling-stroke}
+.pt.desert circle{fill:none;stroke-width:2.2;stroke-dasharray:3 2}
+.pt.sel circle{stroke:var(--ink);stroke-width:2.5}
+.pt.desert.sel circle{stroke-dasharray:none}
+.maptools{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:4px}
+.maptools button{width:32px;height:32px;border-radius:5px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:600 16px var(--sans);cursor:pointer}
+.legend{padding:12px 14px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:6px 8px}
+.lg{display:inline-flex;align-items:center;gap:7px;font-size:13px;padding:4px 9px 4px 7px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.lg[aria-pressed="false"]{opacity:.45}
+.lg i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.lg i.ring{background:none!important;border:2px dashed currentColor}
+.lg small{font:11px var(--mono);color:var(--muted)}
+.side{display:flex;flex-direction:column;gap:12px}
+.detail{padding:16px}
+.detail .kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;font-size:13.5px;margin-top:10px}
+.detail .kv dt{color:var(--muted)}
+.detail .kv dd{margin:0}
+.pill{display:inline-block;font:500 11px/1 var(--mono);letter-spacing:.04em;padding:4px 7px;border-radius:4px;background:var(--chip);color:var(--ink);vertical-align:middle}
+.pill.warn{background:color-mix(in srgb,var(--l-desert) 16%,var(--panel));color:var(--l-desert)}
+.pill.ok{background:color-mix(in srgb,var(--l-indie) 16%,var(--panel));color:var(--l-indie)}
+.pill.plan{background:color-mix(in srgb,var(--l-import) 18%,var(--panel));color:var(--l-import)}
+.listhead{display:flex;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+input[type=search],select,textarea{font:14px var(--sans);color:var(--ink);background:var(--ground);border:1px solid var(--line);border-radius:5px;padding:7px 10px;min-width:0}
+input[type=search]{flex:1 1 160px}
+.rows{max-height:420px;overflow:auto}
+.row{display:grid;grid-template-columns:12px 1fr auto;gap:10px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line);cursor:pointer;width:100%;text-align:left;background:none;border-left:0;border-right:0;border-top:0;color:var(--ink);font:inherit}
+.row:hover,.row.sel{background:var(--chip)}
+.row i{width:10px;height:10px;border-radius:50%}
+.row i.ring{border:2px dashed;background:none!important}
+.row b{font-weight:500;display:block}
+.row span{font-size:12.5px;color:var(--muted)}
+.empty{padding:16px 14px;color:var(--muted);font-size:14px}
+.note{font-size:13px;color:var(--muted);padding:12px 14px;border-top:1px solid var(--line)}
+section[hidden]{display:none}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+td.num{font-variant-numeric:tabular-nums}
+.filters{display:flex;gap:8px;flex-wrap:wrap;padding:12px;border-bottom:1px solid var(--line)}
+.prose{max-width:70ch}
+.prose p,.prose li{margin:0 0 10px}
+.cols2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.pad{padding:18px}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:0;display:grid;gap:12px}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:30px 1fr;gap:10px}
+ol.steps li::before{content:counter(s);font:600 14px var(--mono);color:var(--accent);border:1px solid var(--line);border-radius:50%;width:28px;height:28px;display:grid;place-items:center}
+.timeline{display:grid;gap:0;margin-top:10px}
+.tl{display:grid;grid-template-columns:64px 1fr;gap:12px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.tl b{font:500 13px var(--mono);color:var(--accent)}
+.import{display:grid;gap:10px;padding:16px}
+.import textarea{width:100%;min-height:110px;font:12.5px var(--mono)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:500 13.5px var(--sans);padding:7px 13px;border-radius:5px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--panel);border-color:var(--accent)}
+.msg{font-size:13px;color:var(--muted);min-height:1.2em}
+footer{margin-top:28px;font-size:12.5px;color:var(--muted)}
+@media (prefers-reduced-motion: no-preference){.pt circle{transition:r .15s}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">Local news provision · United Kingdom</div>
+      <h1>UK News Desert Atlas</h1>
+      <p>Where local news exists, where it has gone, and where newsletters are filling the gaps. Built from published research as of September 2026. Add the PINF outlet file to see every district.</p>
+    </div>
+    <span class="ver" id="appver">App v1.0.0</span>
+  </header>
+
+  <div class="stats" aria-label="Headline figures">
+    <div class="stat"><b>37</b><span>local authority districts classed as news deserts (PINF, Dec 2025)</span></div>
+    <div class="stat"><b>4.4m</b><span>people living in those districts</span></div>
+    <div class="stat"><b>27 / 10</b><span>absolute deserts / relative deserts (covered only by a neighbouring title)</span></div>
+    <div class="stat"><b>165</b><span>BBC Local Democracy Reporters across 118 contract areas, to end 2027</span></div>
+    <div class="stat"><b>£12m</b><span>DCMS Local News Fund, 2026–28; year two targets deserts</span></div>
+  </div>
+
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button role="tab" id="t-map" aria-selected="true" data-tab="map">Map</button>
+    <button role="tab" id="t-src" aria-selected="false" data-tab="src">Data sources</button>
+    <button role="tab" id="t-method" aria-selected="false" data-tab="method">Method</button>
+    <button role="tab" id="t-terms" aria-selected="false" data-tab="terms">Food vs news deserts</button>
+    <button role="tab" id="t-import" aria-selected="false" data-tab="import">Import data</button>
+    <button role="tab" id="t-about" aria-selected="false" data-tab="about">About</button>
+  </nav>
+
+  <!-- MAP -->
+  <section id="p-map" role="tabpanel">
+    <div class="grid">
+      <div class="card">
+        <div class="mapbox">
+          <svg id="map" viewBox="0 0 800 1130" role="img" aria-label="Map of the UK showing local news outlets, newsletters and named news deserts"></svg>
+          <div class="maptools">
+            <button id="zin" aria-label="Zoom in">+</button>
+            <button id="zout" aria-label="Zoom out">−</button>
+            <button id="zreset" aria-label="Reset view" style="font-size:12px">⟲</button>
+          </div>
+        </div>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="side">
+        <div class="card detail" id="detail"></div>
+        <div class="card">
+          <div class="listhead">
+            <input type="search" id="q" placeholder="Search places or titles" aria-label="Search places or titles">
+          </div>
+          <div class="rows" id="rows"></div>
+          <div class="note">The map shows records named in the sources, not a complete census. Nub News runs about 25 towns; only the 2026 launches are confirmed here. Import the PINF file for full district coverage.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SOURCES -->
+  <section id="p-src" role="tabpanel" hidden>
+    <div class="card">
+      <div class="filters">
+        <select id="fscope" aria-label="Filter by country">
+          <option value="all">All countries</option>
+          <option value="UK">UK only</option>
+          <option value="US">US only</option>
+        </select>
+        <select id="fkind" aria-label="Filter by kind">
+          <option value="all">All kinds</option>
+          <option value="Outlet database">Outlet databases</option>
+          <option value="Network">Newsletter / hyperlocal networks</option>
+          <option value="Coverage scheme">Coverage schemes</option>
+          <option value="Platform">Newsletter platforms</option>
+          <option value="Reference">Reference / gazetteer</option>
+        </select>
+        <input type="search" id="fsq" placeholder="Search sources" aria-label="Search sources">
+      </div>
+      <div class="tablewrap"><table id="srctable"></table></div>
+    </div>
+  </section>
+
+  <!-- METHOD -->
+  <section id="p-method" role="tabpanel" hidden>
+    <div class="cols2">
+      <div class="card pad prose">
+        <h2>Finding which communities have a newsletter</h2>
+        <p style="color:var(--muted);margin-top:6px">No register of UK local newsletters exists. This is the order of work that builds one.</p>
+        <ol class="steps">
+          <li><div><b>Get the PINF base layer.</b> Email PINF for the CSV behind the Local News Map. It covers every local authority district and flags corporate, independent and IPSO-regulated outlets.</div></li>
+          <li><div><b>Add the networks.</b> Mill Media (7 cities), Nub News (about 25 towns) and the ICNN member map (130+ independents) are listable from their own sites.</div></li>
+          <li><div><b>Search the platforms town by town.</b> Take ONS built-up area names and search Substack, Ghost and Beehiiv for each name plus "news". One-person titles such as Don't Miss Margate only turn up this way.</div></li>
+          <li><div><b>Check each hit for original reporting.</b> Separate reporting from listings and aggregated digests. Bylines, staff count and council coverage are workable tests.</div></li>
+          <li><div><b>Geoparse recent issues.</b> Extract the place names each newsletter actually writes about. That gives real coverage, not claimed coverage.</div></li>
+          <li><div><b>Map at built-up area level and overlay.</b> Compare newsletter coverage with PINF deserts and LDRS contract areas. Test whether newsletters fill deserts or cluster in places already served.</div></li>
+        </ol>
+      </div>
+      <div class="side">
+        <div class="card pad prose">
+          <h3>Known limits</h3>
+          <p>Counting outlets is a proxy. It says nothing about quality, reach or whether council meetings get covered.</p>
+          <p>PINF's first map (2023) was disputed by Newsquest and Reach. Regional titles covering several councils made some areas look like deserts, and unincorporated hyperlocals were missed.</p>
+          <p>Newsletters open and close fast. Nub News closed 17 towns in 18 months, so any map is a snapshot.</p>
+          <p>Subscriber numbers are mostly private. Presence does not tell you reach.</p>
+        </div>
+        <div class="card pad prose">
+          <h3>What to test</h3>
+          <p>PINF's 2025 report found new launches, mostly independent and digital, are more common in affluent districts. Closures hit the most deprived hardest. The overlay in step 6 is the way to check that for newsletters specifically.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TERMS -->
+  <section id="p-terms" role="tabpanel" hidden>
+    <div class="cols2">
+      <div class="card pad">
+        <h2>Food desert</h2>
+        <div class="timeline">
+          <div class="tl"><b>1967</b><div>"Desert" already used for suburbs lacking community amenities.</div></div>
+          <div class="tl"><b>c.1990</b><div>Reputedly coined by a resident of a public housing scheme in the west of Scotland (attribution via Cummins &amp; Macintyre, 2002).</div></div>
+          <div class="tl"><b>1995</b><div>First official use: Low Income Project Team, UK Nutrition Task Force.</div></div>
+          <div class="tl"><b>2008</b><div>Defined in US law (Food, Conservation and Energy Act); later mapped by USDA.</div></div>
+        </div>
+      </div>
+      <div class="card pad">
+        <h2>News desert</h2>
+        <div class="timeline">
+          <div class="tl"><b>1980</b><div>Earliest found use: Schultz, <i>American Review of Canadian Studies</i>, on early 20th-century Canada. A different meaning from today's.</div></div>
+          <div class="tl"><b>2011</b><div>Modern sense. Laura Washington's "communications desert" (Chicago); Tom Stites, NiemanLab, 8 Dec 2011.</div></div>
+          <div class="tl"><b>2016–18</b><div>Popularised by Penelope Muse Abernathy (UNC) and the CJR map (2017).</div></div>
+          <div class="tl"><b>2023</b><div>UK: PINF Local News Map defines deserts by local authority district.</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th></th><th>Food desert</th><th>News desert</th></tr></thead>
+          <tbody>
+            <tr><td><b>Origin</b></td><td>UK public health, 1990s</td><td>US journalism, 2010s</td></tr>
+            <tr><td><b>What's missing</b></td><td>A physical good you travel to</td><td>Coverage of your own place; news itself arrives online</td></tr>
+            <tr><td><b>Measured by</b></td><td>Distance and income (e.g. USDA tract thresholds)</td><td>Outlet counts per county (US) or district (UK)</td></tr>
+            <tr><td><b>Official status</b></td><td>Defined in US law and USDA mapping</td><td>No statutory definition known; cited by UK government from PINF data</td></tr>
+            <tr><td><b>Main critique</b></td><td>"Food apartheid" and "food swamps": the problem is inequity or junk food, not absence</td><td>Counts miss quality, digital-only and ethnic media, and "ghost" papers</td></tr>
+            <tr><td><b>Best GIS method</b></td><td>Network distance analysis</td><td>Geoparsing what is covered, then area overlay</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- IMPORT -->
+  <section id="p-import" role="tabpanel" hidden>
+    <div class="cols2">
+      <div class="card import">
+        <h2>Add your own data</h2>
+        <p style="margin:0;color:var(--muted);font-size:14px">Load a CSV such as the PINF outlet file or your own newsletter search results. Columns are matched by name: <span class="mono">name</span>, <span class="mono">lat</span>/<span class="mono">latitude</span>, <span class="mono">lon</span>/<span class="mono">lng</span>/<span class="mono">longitude</span>, and optionally <span class="mono">place</span>, <span class="mono">type</span>, <span class="mono">url</span>, <span class="mono">notes</span>. Rows without coordinates are placed if the place name matches one already on the map.</p>
+        <input type="file" id="file" accept=".csv,text/csv" aria-label="Choose a CSV file">
+        <label for="paste" class="eyebrow">Or paste CSV</label>
+        <textarea id="paste">name,place,lat,lon,type,url,notes
+Example Town Bulletin,Kendal,54.33,-2.75,newsletter,,Example row — replace with your own
+Example Valley Post,Brecon,51.95,-3.39,newsletter,,Example row — replace with your own</textarea>
+        <div class="btns">
+          <button class="btn primary" id="loadpaste">Add to map</button>
+          <button class="btn" id="clearimp">Remove imported rows</button>
+        </div>
+        <div class="msg" id="impmsg" role="status"></div>
+      </div>
+      <div class="card import">
+        <h2>Copy the map data</h2>
+        <p style="margin:0;color:var(--muted);font-size:14px">Every record on the map as CSV, including anything you imported. Paste it into a spreadsheet or ArcGIS Online.</p>
+        <textarea id="exportbox" readonly aria-label="Map data as CSV"></textarea>
+        <div class="btns"><button class="btn" id="copyexp">Copy CSV</button></div>
+        <div class="msg" id="expmsg" role="status"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABOUT -->
+  <section id="p-about" role="tabpanel" hidden>
+    <div class="cols2">
+      <div class="card pad prose">
+        <h2>About this atlas</h2>
+        <p>A working tool for assessing local news provision across the UK. It combines the published figures from the Public Interest News Foundation, BBC Local News Partnerships, DCMS and the trade press with a hand-built layer of newsletter networks.</p>
+        <p>Points mark a town or city centre, not a coverage area. News desert markers sit at the district centre. Coordinates are approximate.</p>
+        <p>Research compiled 25 September 2026. Figures change often; check the linked sources before quoting them.</p>
+      </div>
+      <div class="card">
+        <div class="tablewrap">
+          <table id="vertable"></table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>Sources: PINF Local News Map and 2023–2025 reports; DCMS Local Media Action Plan (Mar 2026) and Local News Fund (Jul 2026); BBC LDRS 2025 contract notice; Press Gazette; HoldtheFrontPage; ICNN; Mill Media; Ofcom Review of Local Media (Jul 2024). Links in Data sources.</footer>
+</div>
+
+<script>
+const APP_VERSION = "1.0.0";
+const PATHS = {"uk":"M483.7,938.0L479.7,942.0L465.7,946.0L459.9,950.0L449.5,960.0L447.7,961.0L432.0,959.0L420.4,946.0L412.9,941.0L410.0,940.0L406.5,942.0L399.5,943.0L392.6,943.0L396.6,937.0L401.3,934.0L390.2,932.0L387.3,930.0L383.8,926.0L375.7,925.0L371.6,926.0L364.7,932.0L354.2,937.0L341.5,929.0L338.5,926.0L338.5,919.0L336.8,914.0L333.3,912.0L338.0,905.0L343.2,900.0L355.4,896.0L374.0,885.0L384.4,880.0L393.7,872.0L397.8,867.0L400.7,861.0L403.6,853.0L407.7,846.0L403.6,844.0L401.8,839.0L402.4,834.0L404.2,830.0L402.4,824.0L399.5,818.0L400.1,813.0L400.7,808.0L393.1,809.0L385.6,810.0L379.2,814.0L372.8,818.0L367.0,819.0L367.0,816.0L369.3,811.0L375.7,804.0L383.3,799.0L385.6,794.0L387.3,790.0L390.8,786.0L400.1,778.0L417.5,770.0L420.4,769.0L426.8,770.0L433.8,769.0L439.6,766.0L446.0,765.0L458.8,774.0L454.7,761.0L460.5,757.0L469.2,770.0L472.7,771.0L479.1,769.0L476.2,767.0L473.3,767.0L469.8,765.0L466.3,761.0L460.5,749.0L461.1,741.0L464.6,734.0L468.6,727.0L465.7,725.0L462.8,723.0L462.2,716.0L462.8,709.0L470.4,704.0L472.7,696.0L473.3,686.0L472.1,682.0L465.1,683.0L461.7,685.0L458.2,687.0L454.7,687.0L446.0,677.0L440.8,669.0L431.5,653.0L430.3,644.0L437.3,623.0L448.9,609.0L462.2,605.0L459.9,604.0L439.6,604.0L432.6,605.0L426.2,611.0L422.8,612.0L419.3,613.0L415.8,616.0L412.3,620.0L408.8,622.0L401.8,621.0L398.9,622.0L396.6,620.0L394.3,616.0L392.0,615.0L389.1,616.0L382.7,621.0L376.3,624.0L368.7,621.0L358.9,615.0L357.1,617.0L354.8,623.0L353.6,631.0L346.7,624.0L340.3,614.0L338.5,608.0L338.5,601.0L341.5,599.0L344.9,601.0L350.2,585.0L360.6,564.0L364.7,558.0L367.0,550.0L366.4,545.0L364.1,540.0L354.8,530.0L354.8,522.0L356.0,513.0L358.3,507.0L359.5,506.0L372.8,506.0L367.6,503.0L357.7,495.0L357.7,492.0L360.0,484.0L358.9,485.0L357.1,488.0L352.5,497.0L350.2,499.0L343.2,501.0L342.0,505.0L340.3,507.0L336.8,507.0L336.2,511.0L335.1,511.0L333.9,507.0L333.9,500.0L335.6,493.0L338.0,488.0L348.4,477.0L343.2,480.0L332.2,491.0L326.4,498.0L324.6,500.0L324.0,503.0L324.0,505.0L326.9,517.0L325.8,523.0L315.9,561.0L314.2,565.0L312.4,567.0L310.7,567.0L306.0,567.0L303.7,564.0L303.7,561.0L304.9,556.0L308.9,538.0L310.7,533.0L313.6,528.0L318.8,520.0L318.8,519.0L315.3,521.0L313.6,520.0L312.4,519.0L313.0,495.0L315.9,487.0L317.1,475.0L320.0,465.0L323.5,458.0L325.8,449.0L329.3,444.0L330.4,438.0L334.5,431.0L337.4,424.0L335.6,425.0L315.9,443.0L310.7,447.0L303.7,446.0L297.9,444.0L293.8,439.0L292.1,431.0L286.9,431.0L282.8,429.0L282.8,428.0L288.0,424.0L297.3,422.0L306.0,415.0L298.5,410.0L299.1,408.0L305.4,404.0L314.2,390.0L315.9,377.0L311.8,371.0L310.1,367.0L302.5,362.0L300.8,356.0L302.0,353.0L304.3,350.0L308.4,348.0L314.7,345.0L308.9,343.0L306.6,340.0L305.4,336.0L305.4,333.0L308.4,322.0L310.1,318.0L313.0,312.0L328.1,312.0L329.8,310.0L331.6,309.0L339.1,312.0L338.0,309.0L325.8,296.0L324.6,293.0L328.1,286.0L328.1,282.0L327.5,279.0L328.7,276.0L332.7,275.0L344.9,275.0L347.8,274.0L346.7,270.0L343.8,265.0L343.2,262.0L343.8,258.0L344.4,251.0L344.4,248.0L347.3,243.0L349.6,242.0L353.1,241.0L359.5,243.0L362.4,245.0L365.3,249.0L367.0,249.0L375.7,244.0L378.0,243.0L381.5,249.0L395.5,244.0L414.6,242.0L426.2,239.0L438.4,238.0L449.5,235.0L461.7,237.0L461.7,238.0L461.1,241.0L458.2,248.0L458.8,257.0L458.2,259.0L456.4,262.0L452.4,268.0L440.8,276.0L419.8,295.0L407.1,304.0L405.3,309.0L404.7,315.0L411.7,316.0L414.6,318.0L412.9,321.0L401.8,332.0L398.9,342.0L407.1,342.0L414.0,340.0L428.0,334.0L441.3,329.0L447.1,329.0L459.9,333.0L462.2,333.0L467.5,331.0L472.7,331.0L508.7,332.0L518.0,330.0L525.0,332.0L530.2,339.0L535.4,351.0L535.4,353.0L532.5,358.0L526.1,365.0L521.5,374.0L519.7,379.0L519.1,385.0L517.4,390.0L507.5,414.0L497.7,427.0L493.6,436.0L488.4,444.0L483.1,449.0L477.9,452.0L461.7,455.0L457.6,457.0L452.4,462.0L446.6,464.0L452.9,463.0L459.3,461.0L471.0,460.0L484.9,468.0L483.7,475.0L477.9,480.0L465.7,481.0L454.1,492.0L448.9,495.0L443.7,497.0L436.7,497.0L423.9,494.0L418.7,491.0L423.9,496.0L429.1,498.0L461.7,505.0L463.4,504.0L473.9,497.0L487.8,497.0L513.9,510.0L521.5,519.0L532.5,533.0L538.3,538.0L543.0,543.0L545.3,550.0L550.5,574.0L556.3,597.0L563.9,623.0L567.3,630.0L572.0,634.0L594.6,646.0L599.9,650.0L608.6,661.0L617.3,672.0L625.4,681.0L634.1,688.0L629.5,692.0L626.6,698.0L628.9,706.0L632.4,713.0L639.4,726.0L645.7,739.0L643.4,737.0L641.1,736.0L637.6,736.0L634.7,736.0L628.9,732.0L623.1,726.0L612.1,728.0L605.7,728.0L600.4,728.0L610.9,730.0L621.9,731.0L646.3,753.0L654.5,766.0L659.1,784.0L656.2,792.0L651.0,797.0L645.7,803.0L641.7,809.0L655.0,819.0L657.9,819.0L660.8,817.0L663.7,814.0L669.0,806.0L671.3,803.0L679.4,802.0L687.0,803.0L693.9,805.0L700.3,804.0L712.5,808.0L718.9,811.0L735.2,825.0L738.7,832.0L739.8,842.0L740.4,853.0L737.5,863.0L734.6,872.0L732.3,884.0L731.1,888.0L729.4,891.0L720.7,901.0L715.4,904.0L713.1,903.0L710.2,903.0L710.2,905.0L712.5,910.0L713.1,916.0L707.9,920.0L702.7,921.0L694.5,919.0L682.3,927.0L691.0,931.0L692.8,935.0L690.5,943.0L685.2,946.0L679.4,948.0L673.0,948.0L668.4,950.0L663.2,953.0L669.6,951.0L673.6,953.0L676.5,959.0L678.8,961.0L690.5,964.0L697.4,964.0L711.9,962.0L718.3,963.0L721.2,964.0L721.2,969.0L720.1,982.0L718.3,984.0L699.7,995.0L695.7,1003.0L694.5,1007.0L683.5,1007.0L678.8,1011.0L669.6,1015.0L663.2,1018.0L656.2,1022.0L650.4,1024.0L627.2,1018.0L612.6,1019.0L592.9,1024.0L588.3,1023.0L580.7,1018.0L573.2,1016.0L564.4,1014.0L556.3,1010.0L561.5,1018.0L550.5,1025.0L545.9,1027.0L540.6,1026.0L530.2,1029.0L520.9,1028.0L522.1,1033.0L525.0,1037.0L522.6,1039.0L520.3,1040.0L502.3,1036.0L499.4,1037.0L497.7,1040.0L490.7,1038.0L484.3,1033.0L477.3,1029.0L470.4,1028.0L464.6,1028.0L441.3,1037.0L436.1,1045.0L433.8,1057.0L430.9,1068.0L425.1,1076.0L418.7,1077.0L412.3,1071.0L400.7,1065.0L396.6,1061.0L394.9,1061.0L393.7,1062.0L389.1,1064.0L384.4,1064.0L376.9,1066.0L364.1,1071.0L358.9,1074.0L347.8,1084.0L345.5,1087.0L341.5,1096.0L335.1,1098.0L329.8,1092.0L323.5,1089.0L316.5,1092.0L312.4,1095.0L310.7,1092.0L310.1,1087.0L315.3,1080.0L328.7,1075.0L340.3,1063.0L346.1,1055.0L347.8,1050.0L350.7,1048.0L354.8,1047.0L356.6,1042.0L372.8,1022.0L374.0,1018.0L374.6,1010.0L376.3,1002.0L389.1,997.0L395.5,981.0L397.2,980.0L415.8,977.0L429.1,977.0L442.5,980.0L449.5,981.0L456.4,979.0L462.2,975.0L471.5,959.0L476.8,953.0L482.6,946.0L488.4,939.0L497.7,926.0L491.3,930.0L483.7,938.0ZM394.9,768.0L397.2,770.0L403.6,769.0L401.8,774.0L394.9,778.0L390.2,783.0L385.0,787.0L382.1,782.0L379.2,782.0L374.6,774.0L373.4,761.0L379.8,758.0L388.5,758.0L394.9,768.0ZM490.7,177.0L484.3,177.0L487.8,171.0L491.3,170.0L498.8,170.0L497.7,173.0L490.7,177.0ZM578.4,49.0L576.6,50.0L571.4,40.0L575.5,28.0L580.1,28.0L581.3,31.0L580.7,34.0L577.8,35.0L577.8,35.0L578.4,41.0L578.4,47.0L578.4,49.0ZM562.7,46.0L563.9,53.0L566.8,52.0L571.4,58.0L573.7,58.0L577.8,56.0L576.6,62.0L573.2,79.0L572.0,82.0L571.4,88.0L570.3,89.0L569.1,99.0L566.8,103.0L564.4,111.0L563.3,112.0L559.8,109.0L563.3,96.0L564.4,89.0L563.9,85.0L562.1,81.0L556.9,81.0L552.8,83.0L551.7,81.0L551.7,78.0L550.5,77.0L545.3,77.0L543.5,76.0L542.4,74.0L541.8,72.0L547.0,70.0L551.7,71.0L559.2,67.0L554.6,53.0L548.8,52.0L547.6,50.0L548.8,48.0L551.7,47.0L556.9,40.0L559.8,39.0L563.3,39.0L562.7,46.0ZM593.5,19.0L593.5,20.0L590.6,28.0L590.6,32.0L585.9,31.0L585.3,30.0L584.2,25.0L584.8,20.0L585.3,19.0L587.1,18.0L588.3,19.0L591.2,17.0L592.3,17.0L593.5,19.0ZM454.7,221.0L451.8,222.0L448.3,222.0L443.1,216.0L441.3,212.0L441.9,209.0L443.7,208.0L448.9,210.0L451.2,214.0L451.8,217.0L452.4,219.0L455.3,220.0L454.7,221.0ZM468.6,226.0L468.0,226.0L465.7,224.0L462.2,218.0L468.0,216.0L470.4,217.0L469.8,220.0L468.6,226.0ZM461.1,197.0L460.5,199.0L465.1,199.0L471.0,202.0L475.0,202.0L478.5,204.0L476.8,209.0L474.4,211.0L472.7,211.0L465.1,206.0L454.7,208.0L452.9,207.0L451.8,206.0L451.2,204.0L451.2,201.0L450.6,200.0L447.1,203.0L445.4,203.0L444.2,201.0L444.2,198.0L444.2,194.0L446.6,187.0L450.0,186.0L455.3,186.0L461.7,190.0L463.4,192.0L463.4,194.0L461.1,197.0ZM480.2,181.0L475.0,184.0L473.3,182.0L472.7,175.0L466.9,173.0L463.4,171.0L461.7,168.0L462.2,167.0L465.7,165.0L472.7,171.0L475.6,176.0L480.2,177.0L480.8,178.0L480.2,181.0ZM254.9,441.0L251.4,442.0L251.4,441.0L257.3,434.0L260.7,433.0L261.9,433.0L259.6,437.0L254.9,441.0ZM342.0,555.0L335.1,555.0L332.2,554.0L329.3,552.0L325.8,538.0L326.9,533.0L328.7,531.0L329.8,529.0L333.9,528.0L337.4,531.0L339.1,533.0L342.0,543.0L342.6,551.0L342.0,555.0ZM303.1,466.0L279.9,471.0L272.3,471.0L271.2,468.0L272.9,466.0L279.3,464.0L282.2,451.0L272.3,445.0L271.8,443.0L272.3,440.0L273.5,439.0L279.9,436.0L282.2,435.0L284.5,435.0L288.6,439.0L293.3,446.0L299.6,448.0L304.3,451.0L303.1,466.0ZM282.8,507.0L285.1,520.0L286.9,528.0L286.9,530.0L285.1,534.0L275.8,539.0L272.3,539.0L272.3,538.0L274.7,533.0L272.9,527.0L273.5,523.0L272.9,522.0L271.2,523.0L264.2,530.0L261.9,530.0L261.3,529.0L263.1,523.0L263.6,519.0L264.2,517.0L266.5,515.0L268.9,513.0L270.0,513.0L272.3,514.0L277.6,509.0L282.8,507.0ZM292.1,519.0L290.9,520.0L288.0,519.0L286.9,518.0L286.3,515.0L286.3,511.0L288.0,507.0L295.6,503.0L292.1,501.0L292.1,500.0L293.8,495.0L302.0,489.0L304.3,488.0L306.0,488.0L302.0,499.0L292.1,519.0ZM278.7,264.0L271.2,281.0L268.9,282.0L266.0,286.0L258.4,291.0L264.8,291.0L267.1,292.0L267.1,296.0L266.0,298.0L256.7,306.0L250.9,309.0L243.9,317.0L241.0,317.0L237.5,323.0L234.6,325.0L233.4,325.0L231.7,324.0L227.6,319.0L234.6,313.0L235.8,311.0L240.4,308.0L240.4,307.0L232.3,303.0L228.8,300.0L229.4,298.0L232.9,295.0L231.1,295.0L230.0,293.0L227.6,292.0L227.1,290.0L227.1,286.0L227.1,282.0L230.0,280.0L230.5,278.0L231.7,277.0L235.2,278.0L238.7,282.0L243.3,280.0L248.0,281.0L248.5,280.0L244.5,272.0L245.1,270.0L247.4,268.0L259.0,262.0L272.9,251.0L276.4,250.0L277.6,251.0L279.3,257.0L278.7,264.0ZM274.1,404.0L272.3,405.0L270.0,405.0L268.3,403.0L265.4,398.0L271.8,395.0L274.1,397.0L275.3,399.0L275.3,402.0L274.1,404.0ZM282.2,349.0L281.6,354.0L280.5,359.0L282.2,365.0L282.2,369.0L285.1,370.0L286.3,372.0L297.3,374.0L307.8,373.0L309.5,375.0L309.5,377.0L307.8,380.0L302.5,385.0L295.6,394.0L293.3,395.0L290.9,396.0L289.8,395.0L288.0,380.0L281.1,382.0L274.7,382.0L271.8,380.0L269.4,376.0L264.8,367.0L250.9,364.0L247.4,359.0L246.2,356.0L246.8,354.0L249.1,350.0L253.2,352.0L255.5,351.0L256.7,349.0L256.7,348.0L254.3,345.0L254.3,344.0L268.3,340.0L269.4,333.0L272.3,333.0L275.8,335.0L280.5,341.0L282.2,349.0ZM220.1,332.0L227.1,337.0L221.8,347.0L213.7,347.0L202.1,340.0L202.1,338.0L203.2,336.0L205.0,335.0L206.7,334.0L209.6,336.0L213.7,334.0L216.6,334.0L220.1,332.0ZM217.8,388.0L215.4,389.0L212.0,388.0L210.2,387.0L208.5,381.0L207.9,377.0L208.5,370.0L208.5,362.0L214.9,362.0L216.6,363.0L217.8,387.0L217.8,388.0ZM207.9,403.0L203.2,405.0L200.9,404.0L200.9,403.0L202.1,399.0L206.1,398.0L208.5,400.0L209.1,402.0L207.9,403.0ZM277.6,691.0L272.9,691.0L269.4,692.0L267.1,694.0L264.8,694.0L258.4,694.0L252.6,694.0L251.4,692.0L252.6,684.0L251.4,682.0L245.6,680.0L243.9,679.0L240.4,673.0L239.8,671.0L239.2,667.0L235.8,663.0L231.7,659.0L229.4,659.0L224.7,665.0L220.7,670.0L221.8,672.0L223.0,676.0L221.2,679.0L214.3,684.0L213.7,687.0L211.4,688.0L208.5,686.0L200.9,687.0L196.9,686.0L192.8,681.0L182.9,678.0L180.6,672.0L178.9,670.0L167.2,659.0L165.5,655.0L167.2,652.0L171.9,649.0L186.4,643.0L188.7,641.0L188.7,638.0L184.7,636.0L180.6,633.0L179.4,632.0L179.4,630.0L181.8,628.0L185.8,628.0L189.3,629.0L192.2,627.0L196.9,625.0L200.3,623.0L203.2,617.0L206.1,612.0L206.1,609.0L209.1,600.0L210.2,597.0L219.5,591.0L221.8,594.0L226.5,595.0L230.5,592.0L235.2,582.0L238.7,581.0L242.7,582.0L249.7,581.0L263.1,576.0L268.9,576.0L277.0,578.0L282.8,578.0L288.0,586.0L290.9,597.0L297.9,608.0L306.6,618.0L307.2,624.0L303.7,628.0L297.3,632.0L297.3,636.0L301.4,634.0L305.4,633.0L314.7,634.0L317.6,638.0L320.0,645.0L321.1,650.0L320.5,656.0L318.2,654.0L315.3,649.0L313.0,646.0L309.5,645.0L310.7,652.0L310.1,662.0L311.8,663.0L315.9,663.0L313.0,673.0L307.2,675.0L300.2,676.0L298.5,680.0L297.3,684.0L293.8,691.0L289.2,695.0L283.4,694.0L277.6,691.0ZM577.2,1031.0L572.0,1034.0L570.3,1038.0L569.1,1040.0L566.2,1041.0L562.7,1041.0L551.1,1033.0L548.2,1033.0L550.5,1030.0L558.6,1027.0L562.7,1023.0L572.6,1026.0L577.2,1031.0Z","ie":"M61.0,709.0L61.0,712.0L56.3,708.0L54.6,704.0L42.4,702.0L47.6,698.0L49.9,699.0L58.1,700.0L60.4,701.0L61.0,709.0ZM219.5,591.0L210.2,597.0L209.1,600.0L206.1,609.0L206.1,612.0L203.2,617.0L200.3,623.0L196.9,625.0L192.2,627.0L189.3,629.0L185.8,628.0L181.8,628.0L179.4,630.0L179.4,632.0L180.6,633.0L184.7,636.0L188.7,638.0L188.7,641.0L186.4,643.0L171.9,649.0L167.2,652.0L165.5,655.0L167.2,659.0L178.9,670.0L180.6,672.0L182.9,678.0L192.8,681.0L196.9,686.0L200.9,687.0L208.5,686.0L211.4,688.0L213.7,687.0L214.3,684.0L221.2,679.0L223.0,676.0L221.8,672.0L220.7,670.0L224.7,665.0L229.4,659.0L231.7,659.0L235.8,663.0L239.2,667.0L239.8,671.0L240.4,673.0L243.9,679.0L245.6,680.0L251.4,682.0L252.6,684.0L251.4,692.0L252.6,694.0L258.4,694.0L264.8,694.0L267.1,694.0L269.4,692.0L272.9,691.0L277.6,691.0L279.9,695.0L281.1,698.0L277.0,700.0L272.3,699.0L270.0,701.0L270.0,706.0L271.8,712.0L274.7,716.0L277.0,725.0L279.3,736.0L282.2,742.0L282.8,750.0L282.2,754.0L282.8,761.0L281.6,763.0L282.2,770.0L286.3,783.0L287.4,791.0L288.6,807.0L286.3,813.0L282.8,819.0L280.5,826.0L278.7,834.0L277.6,846.0L270.0,860.0L267.1,863.0L263.6,866.0L271.8,875.0L264.8,880.0L257.8,881.0L249.7,879.0L245.1,879.0L240.4,882.0L238.7,884.0L237.5,883.0L234.6,875.0L232.3,883.0L227.6,886.0L219.5,886.0L206.7,888.0L201.5,890.0L199.8,894.0L198.0,898.0L195.7,901.0L193.4,902.0L183.5,905.0L181.8,907.0L177.1,913.0L170.7,917.0L165.5,919.0L161.4,915.0L159.7,912.0L157.4,911.0L150.4,911.0L152.7,912.0L153.9,915.0L154.5,921.0L153.9,926.0L150.4,929.0L146.3,929.0L139.9,935.0L131.2,936.0L127.2,942.0L98.7,950.0L97.6,950.0L93.5,948.0L89.4,947.0L85.4,948.0L73.2,953.0L67.4,952.0L74.9,940.0L84.8,934.0L85.9,932.0L82.5,931.0L63.9,935.0L57.5,939.0L51.1,940.0L54.0,934.0L62.1,927.0L66.8,923.0L69.7,922.0L72.6,918.0L81.3,913.0L52.8,923.0L45.9,922.0L44.1,919.0L38.3,920.0L36.0,913.0L44.7,903.0L49.4,898.0L55.7,896.0L61.0,892.0L63.3,888.0L60.4,886.0L43.6,887.0L35.4,887.0L36.0,883.0L37.2,879.0L45.9,873.0L50.5,872.0L54.6,872.0L58.7,874.0L61.6,876.0L71.4,875.0L67.4,871.0L66.8,862.0L63.3,860.0L67.4,856.0L72.0,853.0L79.6,845.0L81.9,844.0L97.0,842.0L112.7,838.0L128.9,832.0L120.8,829.0L116.7,824.0L110.3,833.0L106.3,837.0L93.5,838.0L89.4,837.0L83.6,835.0L81.9,836.0L80.1,838.0L71.4,842.0L62.7,843.0L73.2,835.0L85.9,822.0L88.8,818.0L93.5,810.0L91.8,807.0L89.4,805.0L98.7,790.0L102.2,788.0L108.0,787.0L112.7,785.0L114.4,785.0L116.1,784.0L120.2,779.0L114.4,776.0L108.0,775.0L88.8,776.0L86.5,776.0L83.6,775.0L82.5,773.0L81.3,768.0L80.1,767.0L75.5,767.0L71.4,768.0L67.9,768.0L65.0,766.0L70.3,761.0L63.9,759.0L58.1,760.0L52.8,759.0L52.8,755.0L55.2,752.0L51.7,749.0L51.1,745.0L54.6,743.0L58.1,744.0L65.0,741.0L74.3,740.0L66.2,737.0L63.3,734.0L63.3,730.0L63.9,727.0L73.2,722.0L82.5,720.0L81.9,716.0L82.5,712.0L72.6,711.0L63.3,714.0L64.5,706.0L66.2,700.0L66.8,695.0L66.2,691.0L62.1,692.0L61.0,686.0L59.2,681.0L52.8,684.0L52.8,678.0L54.6,674.0L58.1,672.0L62.1,673.0L67.9,673.0L74.3,670.0L83.6,669.0L97.6,670.0L107.4,679.0L110.3,678.0L114.4,672.0L116.1,671.0L130.7,674.0L139.9,677.0L142.9,676.0L141.1,670.0L138.2,665.0L141.7,660.0L146.9,656.0L149.8,654.0L157.4,651.0L160.9,649.0L163.2,642.0L166.7,636.0L147.5,639.0L130.1,632.0L133.0,627.0L136.5,624.0L142.9,622.0L143.4,619.0L146.9,617.0L152.1,611.0L150.4,604.0L151.6,598.0L155.0,594.0L156.8,589.0L158.5,585.0L166.1,584.0L174.2,580.0L176.5,581.0L185.8,580.0L188.7,581.0L188.1,575.0L193.4,574.0L195.7,576.0L196.9,580.0L199.2,583.0L199.8,588.0L198.0,592.0L195.7,595.0L198.0,598.0L194.0,603.0L198.6,601.0L204.4,595.0L204.4,591.0L203.2,586.0L201.5,581.0L202.1,575.0L205.6,572.0L214.9,570.0L210.8,564.0L214.3,563.0L217.8,565.0L223.0,570.0L228.8,573.0L234.6,576.0L228.8,582.0L222.4,586.0L219.5,591.0Z"};
+const K = 100, C = Math.cos(54.5 * Math.PI / 180);
+const proj = (lat, lon) => [(lon + 11) * C * K, (61 - lat) * K];
+
+// Layers, each with its own version (bump when its data or handling changes)
+const LAYERS = [
+  {id:"desert", name:"Named news deserts", color:"--l-desert", ring:true, v:"1.0", note:"PINF-named, disputed and Ofcom-flagged districts"},
+  {id:"mill",   name:"Mill Media",          color:"--l-mill",   v:"1.0", note:"City newsletter titles"},
+  {id:"nub",    name:"Nub News",            color:"--l-nub",    v:"1.0", note:"2026 launches only"},
+  {id:"indie",  name:"Independent hyperlocals", color:"--l-indie", v:"1.0", note:"ICNN members and others named in sources"},
+  {id:"letter", name:"Independent newsletters", color:"--l-letter", v:"1.0", note:"Substack / Ghost / Beehiiv titles"},
+  {id:"import", name:"Imported",            color:"--l-import", v:"1.0", note:"Your CSV rows"}
+];
+
+const S = {
+  pinf25:"https://www.publicinterestnews.org.uk/blog/local-news-launches-closures-and-the-state-of-play-in-2025/",
+  pinf24:"https://www.publicinterestnews.org.uk/local-news-map-report-2024",
+  htfp23:"https://www.holdthefrontpage.co.uk/2023/news/publishers-rubbish-local-journalism-maps-news-deserts-claim/",
+  ofcom:"https://www.ofcom.org.uk/siteassets/resources/documents/tv-radio-and-on-demand/reviews-and-investigations/local-media/review-of-local-media-in-the-uk-initial-findings.pdf",
+  mill:"https://millmediaco.uk/our-sites/",
+  millLeeds:"https://pressgazette.co.uk/publishers/regional-newspapers/mill-media-asks-for-subscribers-first-promising-launch-later-in-leeds/",
+  nub26:"https://www.holdthefrontpage.co.uk/2026/news/hyperlocal-network-planning-more-launches-after-new-site-goes-live/",
+  nubPG:"https://pressgazette.co.uk/publishers/regional-newspapers/nub-news-set-to-hit-first-profit-after-scaling-down-hyperlocal-footprint/",
+  icnn:"https://www.journalism.co.uk/fair-access-for-all-the-independent-community-news-network-officially-launches/",
+  icnnHome:"https://www.icnn.co.uk/",
+  margate:"https://pressgazette.co.uk/newsletters/hyperlocal-newsletters-find-revenue-covering-kent-coastal-towns/",
+  hawick:"https://pressgazette.substack.com/p/ex-mail-on-sunday-execs-contest-harry",
+  lyme:"https://axminster.nub.news/news/local-news/the-nub-news-network-is-always-growing-and-you-can-be-a-part-of-it"
+};
+
+let RECORDS = [
+  // Deserts
+  {layer:"desert", name:"Lewisham", place:"Lewisham", lat:51.45, lon:-0.02, status:"PINF desert (2024)", tone:"warn", detail:"Named with Gateshead as one of the two most populous news deserts in PINF's April 2024 report.", src:S.pinf24},
+  {layer:"desert", name:"Gateshead", place:"Gateshead", lat:54.95, lon:-1.60, status:"PINF desert (2024)", tone:"warn", detail:"Named with Lewisham as one of the two most populous news deserts in PINF's April 2024 report.", src:S.pinf24},
+  {layer:"desert", name:"Nuneaton and Bedworth", place:"Nuneaton", lat:52.52, lon:-1.47, status:"PINF desert (2024)", tone:"warn", detail:"Became a news desert after Bedworth Nub News closed (PINF 2024).", src:S.pinf24},
+  {layer:"desert", name:"Newport", place:"Newport", lat:51.58, lon:-2.99, status:"Disputed (2023)", tone:"plan", detail:"Classed as a desert in PINF's 2023 pilot. Newsquest objected: the South Wales Argus is based there but also covers neighbouring councils.", src:S.htfp23},
+  {layer:"desert", name:"Telford and Wrekin", place:"Telford", lat:52.68, lon:-2.45, status:"Disputed (2023)", tone:"plan", detail:"Classed as a desert in the 2023 pilot despite being home to the Shropshire Star, which covers several districts.", src:S.htfp23},
+  {layer:"desert", name:"Hinckley and Bosworth", place:"Hinckley", lat:52.54, lon:-1.37, status:"Error corrected (2023)", tone:"plan", detail:"Listed as a desert in 2023; PINF accepted the error because the Hinckley Times serves it.", src:S.htfp23},
+  {layer:"desert", name:"Merthyr Tydfil", place:"Merthyr Tydfil", lat:51.75, lon:-3.38, status:"Thin provision (Ofcom 2024)", tone:"plan", detail:"Ofcom noted very little dedicated local news provision.", src:S.ofcom},
+  {layer:"desert", name:"Neath Port Talbot", place:"Neath", lat:51.66, lon:-3.80, status:"Thin provision (Ofcom 2024)", tone:"plan", detail:"Ofcom noted very little dedicated local news provision.", src:S.ofcom},
+  // Mill Media
+  {layer:"mill", name:"The Mill", place:"Manchester", lat:53.48, lon:-2.24, status:"Active", tone:"ok", detail:"Mill Media's first and largest title (4,000+ paying subscribers, ~54k readers). Founded 2020.", src:S.mill},
+  {layer:"mill", name:"The Tribune", place:"Sheffield", lat:53.38, lon:-1.47, status:"Active", tone:"ok", detail:"Mill Media city title.", src:S.mill},
+  {layer:"mill", name:"The Post", place:"Liverpool", lat:53.41, lon:-2.98, status:"Active", tone:"ok", detail:"Mill Media city title.", src:S.mill},
+  {layer:"mill", name:"The Dispatch", place:"Birmingham", lat:52.48, lon:-1.90, status:"Active", tone:"ok", detail:"Mill Media city title.", src:S.mill},
+  {layer:"mill", name:"The Bell", place:"Glasgow", lat:55.86, lon:-4.25, status:"Active", tone:"ok", detail:"Mill Media city title, launched on Ghost.", src:S.mill},
+  {layer:"mill", name:"The Londoner", place:"London", lat:51.51, lon:-0.13, status:"Active", tone:"ok", detail:"Mill Media city title, launched on Ghost.", src:S.mill},
+  {layer:"mill", name:"The Exchange", place:"Leeds", lat:53.80, lon:-1.55, status:"New (2026)", tone:"plan", detail:"Seventh Mill Media title. Opened with a subscribers-first campaign in May 2026.", src:S.millLeeds},
+  // Nub News
+  {layer:"nub", name:"Stafford Nub News", place:"Stafford", lat:52.81, lon:-2.12, status:"Launched 2026", tone:"ok", detail:"Described by Nub News as its most successful launch. Website plus weekly newsletter.", src:S.nub26},
+  {layer:"nub", name:"Chester Nub News", place:"Chester", lat:53.19, lon:-2.89, status:"Launched 2026", tone:"ok", detail:"Recent launch before Stafford.", src:S.nub26},
+  {layer:"nub", name:"Leamington Nub News", place:"Royal Leamington Spa", lat:52.29, lon:-1.54, status:"Launched 2026", tone:"ok", detail:"Recent launch before Stafford.", src:S.nub26},
+  {layer:"nub", name:"Nantwich Nub News", place:"Nantwich", lat:53.07, lon:-2.52, status:"Launched 2026", tone:"ok", detail:"Recent launch before Stafford.", src:S.nub26},
+  // Independent hyperlocals
+  {layer:"indie", name:"The Bristol Cable", place:"Bristol", lat:51.45, lon:-2.59, status:"ICNN member", tone:"ok", detail:"Co-operative investigative outlet.", src:S.icnn},
+  {layer:"indie", name:"Hackney Citizen", place:"Hackney", lat:51.55, lon:-0.06, status:"ICNN member", tone:"ok", detail:"London borough title.", src:S.icnn},
+  {layer:"indie", name:"Caerphilly Observer", place:"Caerphilly", lat:51.58, lon:-3.22, status:"ICNN member", tone:"ok", detail:"South Wales hyperlocal.", src:S.icnn},
+  {layer:"indie", name:"Shetland News", place:"Lerwick", lat:60.15, lon:-1.15, status:"ICNN member · LDRS holder", tone:"ok", detail:"Holds a BBC Local Democracy Reporter contract.", src:S.icnn},
+  {layer:"indie", name:"The Lincolnite", place:"Lincoln", lat:53.23, lon:-0.54, status:"ICNN member", tone:"ok", detail:"City news site.", src:S.icnn},
+  {layer:"indie", name:"Wrexham.com", place:"Wrexham", lat:53.05, lon:-3.00, status:"ICNN member", tone:"ok", detail:"Town news site.", src:S.icnn},
+  {layer:"indie", name:"Island Echo", place:"Isle of Wight", lat:50.70, lon:-1.29, status:"ICNN featured", tone:"ok", detail:"Independent digital news for the Isle of Wight.", src:S.icnnHome},
+  {layer:"indie", name:"The Hawick Paper", place:"Hawick", lat:55.42, lon:-2.79, status:"Independent", tone:"ok", detail:"Local newsbrand for a Borders town of about 10,000 people.", src:S.hawick},
+  {layer:"indie", name:"Lyme Online", place:"Lyme Regis", lat:50.73, lon:-2.94, status:"Independent", tone:"ok", detail:"Hyperlocal website and newspaper for the Lyme Regis area.", src:S.lyme},
+  // Newsletters
+  {layer:"letter", name:"Don't Miss Margate", place:"Margate", lat:51.39, lon:1.39, status:"Active (Substack)", tone:"ok", detail:"Launched May 2024. 1,000 subscribers in three months; on track for about £85k a year.", src:S.margate},
+  {layer:"letter", name:"Don't Miss Broadstairs", place:"Broadstairs", lat:51.36, lon:1.44, status:"Planned Apr 2026", tone:"plan", detail:"Third edition announced for April 2026. Launch not confirmed in sources checked.", src:S.margate}
+];
+
+const SOURCES = [
+  {name:"PINF Local News Map", scope:"UK", kind:"Outlet database", unit:"Local authority district", covers:"All local outlets (print, online, radio, TV) covering fewer than 5 districts", updated:"Late 2025", access:"Interactive map; CSV by email", gaps:"Unincorporated hyperlocals; content quality", url:"https://www.publicinterestnews.org.uk/map/"},
+  {name:"PINF UK Local News Report 2025", scope:"UK", kind:"Outlet database", unit:"District", covers:"Deserts, drylands, oases; launches and closures; deprivation links", updated:"Dec 2025", access:"Free report", gaps:"Outlet counts only", url:S.pinf25},
+  {name:"ICNN member map", scope:"UK", kind:"Network", unit:"Outlet", covers:"130+ independent community and hyperlocal publishers", updated:"Ongoing", access:"Interactive map", gaps:"Members only", url:"https://www.communityjournalism.co.uk/interactive-map-of-members/"},
+  {name:"Press Gazette independent titles map", scope:"UK", kind:"Outlet database", unit:"Outlet", covers:"~400 independent local titles from ICNN, HTFP, IPSO and Impress lists", updated:"Sep 2022", access:"Article map", gaps:"Four years old", url:"https://pressgazette.co.uk/news/uk-independent-community-news-sector/"},
+  {name:"BBC Local Democracy Reporting Service", scope:"UK", kind:"Coverage scheme", unit:"118 contract areas", covers:"165 reporters covering councils and public bodies", updated:"Contracts Jul 2025 – end 2027", access:"BBC LNP site; tender notices", gaps:"Council reporting only", url:"https://www.find-tender.service.gov.uk/procurement/ocds-h6vhtk-04c196"},
+  {name:"DCMS Local News Fund", scope:"UK", kind:"Coverage scheme", unit:"Grant", covers:"£6m 2026/27 plus up to £6m 2027/28; year two targets deserts", updated:"Jul 2026", access:"GOV.UK", gaps:"Recipients not yet listed", url:"https://www.gov.uk/government/news/local-journalism-to-benefit-from-new-government-funding-to-reach-new-audiences"},
+  {name:"Mill Media", scope:"UK", kind:"Network", unit:"City", covers:"7 city titles; 13,000+ paying subscribers; 200k+ on mailing lists", updated:"2026", access:"Our Sites page", gaps:"Cities only", url:S.mill},
+  {name:"Nub News", scope:"UK", kind:"Network", unit:"Town", covers:"About 25 towns: websites, weekly newsletters, app", updated:"Jul 2026", access:"nub.news (town list blocks automated fetch)", gaps:"Frequent closures", url:S.nubPG},
+  {name:"Substack / Ghost / Beehiiv", scope:"UK", kind:"Platform", unit:"Newsletter", covers:"Independent one-person local titles", updated:"—", access:"Platform search, town by town", gaps:"No register exists", url:"https://pressgazette.co.uk/newsletters/newsletter-platforms-for-publishers-compared-substack-versus-the-rest/"},
+  {name:"Ofcom Review of Local Media", scope:"UK", kind:"Reference", unit:"Nation / district", covers:"Local media use and provision; community radio and local TV lists", updated:"Jul 2024", access:"PDF", gaps:"Initial findings", url:S.ofcom},
+  {name:"GOV.UK: Local news provision and public service performance", scope:"UK", kind:"Reference", unit:"Local authority", covers:"Links outlet counts to council performance using PINF data", updated:"Apr 2026", access:"GOV.UK", gaps:"Correlational", url:"https://www.gov.uk/government/publications/local-news-provision-and-local-public-service-performance/local-news-provision-and-local-public-service-performance"},
+  {name:"ONS built-up areas", scope:"UK", kind:"Reference", unit:"Town", covers:"Gazetteer of towns for platform searches and mapping", updated:"Census 2021", access:"ONS Open Geography Portal", gaps:"England and Wales only; Scotland and NI need NRS / NISRA equivalents", url:"https://geoportal.statistics.gov.uk/"},
+  {name:"Medill State of Local News", scope:"US", kind:"Outlet database", unit:"County", covers:"~8,000 outlets incl. network digital sites (Patch, Axios)", updated:"Oct 2025", access:"Report and maps", gaps:"County level is coarse", url:"https://localnewsinitiative.northwestern.edu/projects/state-of-local-news/2025/report/"},
+  {name:"Global Project Oasis", scope:"US", kind:"Outlet database", unit:"Outlet", covers:"1,800+ independent digital outlets in US and Canada; Europe and global directories too", updated:"2025", access:"Searchable directory", gaps:"Independents only", url:"https://globalprojectoasis.org/about-the-study/us-ca/"}
+];
+
+// ---------- helpers
+const $ = s => document.querySelector(s);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const store = {get(k){try{return localStorage.getItem(k)}catch(e){return null}}, set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+const layerOf = id => LAYERS.find(l => l.id === id);
+let visible = new Set(LAYERS.map(l => l.id));
+let selected = null;
+
+// ---------- map
+const svg = $("#map"), NS = "http://www.w3.org/2000/svg";
+const FULL = {x:120, y:0, w:680, h:1130};
+let vb = {...FULL};
+function setVB(){ svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); drawPoints(); }
+
+function drawBase(){
+  svg.innerHTML = "";
+  const g = document.createElementNS(NS, "g");
+  for (let lat = 50; lat <= 60; lat += 2){
+    const [, y] = proj(lat, 0);
+    g.insertAdjacentHTML("beforeend", `<line class="grat" x1="0" x2="900" y1="${y}" y2="${y}"/><text class="gratlbl" x="${FULL.x+6}" y="${y-4}">${lat}°N</text>`);
+  }
+  for (let lon = -8; lon <= 2; lon += 2){
+    const [x] = proj(55, lon);
+    g.insertAdjacentHTML("beforeend", `<line class="grat" y1="0" y2="1130" x1="${x}" x2="${x}"/>`);
+  }
+  g.insertAdjacentHTML("beforeend", `<path class="land other" d="${PATHS.ie}"/><path class="land" d="${PATHS.uk}"/>`);
+  svg.appendChild(g);
+  const pts = document.createElementNS(NS, "g"); pts.id = "pts"; svg.appendChild(pts);
+}
+
+function drawPoints(){
+  const g = $("#pts"); if (!g) return;
+  const scale = vb.w / FULL.w, r = 7 * scale;
+  const recs = RECORDS.filter(d => visible.has(d.layer) && isFinite(d.lat));
+  // deserts first so dots sit on top
+  recs.sort((a,b) => (a.layer==="desert"?0:1) - (b.layer==="desert"?0:1));
+  g.innerHTML = recs.map(d => {
+    const [x,y] = proj(d.lat, d.lon), L = layerOf(d.layer), col = css(L.color);
+    const isSel = selected === d;
+    const rr = d.layer === "desert" ? r*1.9 : r;
+    const fill = d.layer === "desert" ? "none" : col;
+    const stroke = d.layer === "desert" ? col : "";
+    return `<g class="pt ${d.layer==="desert"?"desert":""} ${isSel?"sel":""}" data-i="${RECORDS.indexOf(d)}" tabindex="0" role="button" aria-label="${esc(d.name)}, ${esc(d.place)}">
+      <circle cx="${x}" cy="${y}" r="${isSel?rr*1.35:rr}" fill="${fill}" ${stroke?`style="stroke:${stroke}"`:""}><title>${esc(d.name)} · ${esc(d.place)}</title></circle></g>`;
+  }).join("");
+}
+svg.addEventListener("click", e => { const p = e.target.closest(".pt"); if (p && !moved) select(RECORDS[+p.dataset.i]); });
+svg.addEventListener("keydown", e => { const p = e.target.closest(".pt"); if (p && (e.key==="Enter"||e.key===" ")){ e.preventDefault(); select(RECORDS[+p.dataset.i]); }});
+
+// zoom + pan
+function zoom(f, cx, cy){
+  cx ??= vb.x + vb.w/2; cy ??= vb.y + vb.h/2;
+  const w = Math.min(FULL.w*1.2, Math.max(60, vb.w*f)), k = w / vb.w;
+  vb = {x: cx - (cx-vb.x)*k, y: cy - (cy-vb.y)*k, w, h: vb.h*k}; setVB();
+}
+$("#zin").onclick = () => zoom(.6); $("#zout").onclick = () => zoom(1/.6);
+$("#zreset").onclick = () => { vb = {...FULL}; setVB(); };
+function toSvg(e){ const r = svg.getBoundingClientRect(); return [vb.x + (e.clientX-r.left)/r.width*vb.w, vb.y + (e.clientY-r.top)/r.height*vb.h]; }
+svg.addEventListener("wheel", e => { e.preventDefault(); const [x,y] = toSvg(e); zoom(e.deltaY < 0 ? .8 : 1.25, x, y); }, {passive:false});
+let drag = null, moved = false;
+svg.addEventListener("pointerdown", e => { drag = {x:e.clientX, y:e.clientY, vb:{...vb}}; moved = false; });
+window.addEventListener("pointermove", e => {
+  if (!drag) return; const r = svg.getBoundingClientRect();
+  const dx = (e.clientX-drag.x)/r.width*vb.w, dy = (e.clientY-drag.y)/r.height*vb.h;
+  if (Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y) > 4){ moved = true; svg.classList.add("dragging"); }
+  if (moved){ vb.x = drag.vb.x - dx; vb.y = drag.vb.y - dy; svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); }
+});
+window.addEventListener("pointerup", () => { drag = null; svg.classList.remove("dragging"); setTimeout(()=>moved=false,0); });
+
+// ---------- legend
+function drawLegend(){
+  $("#legend").innerHTML = LAYERS.map(l => {
+    const n = RECORDS.filter(r => r.layer === l.id).length;
+    if (l.id === "import" && !n) return "";
+    return `<button class="lg" aria-pressed="${visible.has(l.id)}" data-l="${l.id}" style="color:var(${l.color})">
+      <i class="${l.ring?"ring":""}" style="background:var(${l.color})"></i><span style="color:var(--ink)">${esc(l.name)}</span><small>${n} · v${l.v}</small></button>`;
+  }).join("");
+  $("#legend").querySelectorAll(".lg").forEach(b => b.onclick = () => {
+    const id = b.dataset.l; visible.has(id) ? visible.delete(id) : visible.add(id);
+    drawLegend(); drawPoints(); drawRows();
+  });
+}
+
+// ---------- list + detail
+function drawRows(){
+  const q = $("#q").value.trim().toLowerCase();
+  const recs = RECORDS.filter(d => visible.has(d.layer) && (!q || (d.name+" "+d.place+" "+d.status).toLowerCase().includes(q)));
+  $("#rows").innerHTML = recs.length ? recs.map(d => {
+    const L = layerOf(d.layer);
+    return `<button class="row ${selected===d?"sel":""}" data-i="${RECORDS.indexOf(d)}">
+      <i class="${L.ring?"ring":""}" style="background:var(${L.color});border-color:var(${L.color})"></i>
+      <div><b>${esc(d.name)}</b><span>${esc(d.place)} · ${esc(L.name)}</span></div>
+      <span class="pill ${d.tone||""}">${esc(d.status||"")}</span></button>`;
+  }).join("") : `<div class="empty">No records match. Clear the search or turn layers back on.</div>`;
+  $("#rows").querySelectorAll(".row").forEach(b => b.onclick = () => select(RECORDS[+b.dataset.i], true));
+}
+function drawDetail(){
+  const d = selected;
+  if (!d){
+    $("#detail").innerHTML = `<div class="eyebrow">How to read the map</div>
+      <h2 style="margin-top:6px">Select a place</h2>
+      <p style="color:var(--muted);margin:8px 0 0;font-size:14px">Filled dots are outlets and newsletters. Dashed rings are districts named as news deserts, disputed or thin in the sources. Scroll or pinch to zoom; drag to pan.</p>`;
+    return;
+  }
+  const L = layerOf(d.layer);
+  $("#detail").innerHTML = `<div class="eyebrow" style="color:var(${L.color})">${esc(L.name)} · layer v${L.v}</div>
+    <h2 style="margin-top:6px">${esc(d.name)}</h2>
+    <dl class="kv">
+      <dt>Place</dt><dd>${esc(d.place)}</dd>
+      <dt>Status</dt><dd><span class="pill ${d.tone||""}">${esc(d.status||"—")}</span></dd>
+      <dt>Location</dt><dd class="mono">${(+d.lat).toFixed(2)}°, ${(+d.lon).toFixed(2)}°</dd>
+    </dl>
+    <p style="margin:12px 0 0;font-size:14.5px">${esc(d.detail||"")}</p>
+    ${d.src?`<p style="margin:10px 0 0;font-size:13.5px"><a href="${esc(d.src)}" target="_blank" rel="noopener">Source</a></p>`:""}`;
+}
+function select(d, pan){
+  selected = d; drawDetail(); drawPoints(); drawRows();
+  if (pan && d){ const [x,y] = proj(d.lat,d.lon); if (vb.w > 300){ vb.w = 300; vb.h = 300*FULL.h/FULL.w; } vb.x = x - vb.w/2; vb.y = y - vb.h/2; setVB(); }
+}
+$("#q").addEventListener("input", drawRows);
+
+// ---------- sources table
+function drawSources(){
+  const sc = $("#fscope").value, k = $("#fkind").value, q = $("#fsq").value.trim().toLowerCase();
+  const rows = SOURCES.filter(s => (sc==="all"||s.scope===sc) && (k==="all"||s.kind===k) && (!q || Object.values(s).join(" ").toLowerCase().includes(q)));
+  $("#srctable").innerHTML = `<thead><tr><th>Source</th><th>Country</th><th>Kind</th><th>Unit</th><th>Covers</th><th>Updated</th><th>Access</th><th>Gaps</th></tr></thead><tbody>` +
+    (rows.length ? rows.map(s => `<tr><td><a href="${esc(s.url)}" target="_blank" rel="noopener"><b>${esc(s.name)}</b></a></td><td><span class="pill">${s.scope}</span></td><td>${esc(s.kind)}</td><td>${esc(s.unit)}</td><td>${esc(s.covers)}</td><td class="num">${esc(s.updated)}</td><td>${esc(s.access)}</td><td>${esc(s.gaps)}</td></tr>`).join("")
+    : `<tr><td colspan="8" class="empty">No sources match these filters.</td></tr>`) + `</tbody>`;
+}
+["#fscope","#fkind"].forEach(s => $(s).addEventListener("change", drawSources));
+$("#fsq").addEventListener("input", drawSources);
+
+// ---------- CSV import / export
+function parseCSV(t){
+  const rows = []; let row = [], f = "", q = false;
+  for (let i = 0; i < t.length; i++){
+    const c = t[i];
+    if (q){ if (c === '"'){ if (t[i+1] === '"'){ f += '"'; i++; } else q = false; } else f += c; }
+    else if (c === '"') q = true;
+    else if (c === ","){ row.push(f); f = ""; }
+    else if (c === "\n" || c === "\r"){ if (c === "\r" && t[i+1] === "\n") i++; row.push(f); rows.push(row); row = []; f = ""; }
+    else f += c;
+  }
+  if (f || row.length){ row.push(f); rows.push(row); }
+  return rows.filter(r => r.some(x => x.trim()));
+}
+function importCSV(text){
+  const rows = parseCSV(text);
+  if (rows.length < 2) return "No data rows found. The first line must be column names.";
+  const h = rows[0].map(x => x.trim().toLowerCase());
+  const col = names => h.findIndex(x => names.includes(x));
+  const iN = col(["name","title","outlet","outlet name","publication"]), iLa = col(["lat","latitude","y"]), iLo = col(["lon","lng","long","longitude","x"]);
+  const iP = col(["place","town","city","location","lad","district","local authority"]), iT = col(["type","category","kind","layer"]), iU = col(["url","website","link"]), iNo = col(["notes","note","description"]);
+  if (iN < 0) return "Couldn't find a name column. Add one called name, title or outlet.";
+  const gaz = {}; RECORDS.forEach(r => gaz[r.place.toLowerCase()] = [r.lat, r.lon]);
+  let added = 0, unplaced = 0;
+  rows.slice(1).forEach(r => {
+    let lat = parseFloat(r[iLa]), lon = parseFloat(r[iLo]); const place = iP >= 0 ? r[iP].trim() : "";
+    if (!(isFinite(lat) && isFinite(lon)) && gaz[place.toLowerCase()]) [lat, lon] = gaz[place.toLowerCase()];
+    if (!(isFinite(lat) && isFinite(lon)) || lat < 49 || lat > 61.5 || lon < -11 || lon > 2.5){ unplaced++; return; }
+    RECORDS.push({layer:"import", name:r[iN].trim(), place: place || "—", lat, lon, status: iT>=0 ? r[iT].trim() : "Imported", tone:"", detail: iNo>=0 ? r[iNo] : "", src: iU>=0 ? r[iU].trim() : "", imported:true});
+    added++;
+  });
+  visible.add("import"); refreshAll();
+  return `Added ${added} row${added===1?"":"s"} to the map.` + (unplaced ? ` ${unplaced} skipped: no coordinates inside the UK and no matching place name.` : "");
+}
+$("#loadpaste").onclick = () => { $("#impmsg").textContent = importCSV($("#paste").value); };
+$("#file").onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { $("#impmsg").textContent = importCSV(r.result); }; r.readAsText(f); };
+$("#clearimp").onclick = () => { const n = RECORDS.filter(r => r.imported).length; RECORDS = RECORDS.filter(r => !r.imported); if (selected?.imported) selected = null; refreshAll(); $("#impmsg").textContent = n ? `Removed ${n} imported row${n===1?"":"s"}.` : "Nothing imported yet."; };
+function exportCSV(){
+  const q = v => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g,'""')}"` : String(v ?? "");
+  const lines = ["name,place,lat,lon,layer,layer_version,status,notes,source"];
+  RECORDS.forEach(r => lines.push([r.name, r.place, r.lat, r.lon, layerOf(r.layer).name, layerOf(r.layer).v, r.status, r.detail, r.src].map(q).join(",")));
+  $("#exportbox").value = lines.join("\n");
+}
+$("#copyexp").onclick = () => {
+  navigator.clipboard.writeText($("#exportbox").value).then(() => $("#expmsg").textContent = "Copied.", () => { $("#exportbox").select(); $("#expmsg").textContent = "Text selected. Press Ctrl+C or ⌘C to copy."; });
+};
+
+// ---------- versions
+function drawVersions(){
+  $("#appver").textContent = `App v${APP_VERSION}`;
+  $("#vertable").innerHTML = `<thead><tr><th>Component</th><th>Version</th><th>Records</th><th>Notes</th></tr></thead><tbody>
+    <tr><td><b>App</b></td><td class="mono">${APP_VERSION}</td><td class="num">${RECORDS.length}</td><td>First release, 25 Sep 2026</td></tr>` +
+    LAYERS.map(l => `<tr><td><span style="color:var(${l.color})">●</span> ${esc(l.name)}</td><td class="mono">${l.v}</td><td class="num">${RECORDS.filter(r=>r.layer===l.id).length}</td><td>${esc(l.note)}</td></tr>`).join("") +
+    `<tr><td>Data sources catalogue</td><td class="mono">1.0</td><td class="num">${SOURCES.length}</td><td>UK and US datasets</td></tr>
+     <tr><td>Basemap</td><td class="mono">1.0</td><td class="num">—</td><td>Natural Earth 1:50m via world-atlas; simple equirectangular projection at 54.5°N</td></tr></tbody>`;
+}
+
+// ---------- tabs
+function showTab(id){
+  document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === id));
+  document.querySelectorAll("section[role=tabpanel]").forEach(s => s.hidden = s.id !== "p-"+id);
+  if (id === "import") exportCSV();
+  store.set("nda-tab", id);
+}
+document.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+function refreshAll(){ drawLegend(); drawPoints(); drawRows(); drawDetail(); exportCSV(); drawVersions(); }
+drawBase(); setVB(); drawSources(); refreshAll();
+const hash = location.hash.slice(1), saved = store.get("nda-tab");
+const tabs = ["map","src","method","terms","import","about"];
+showTab(tabs.includes(hash) ? hash : (tabs.includes(saved) ? saved : "map"));
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", drawPoints);
+new MutationObserver(drawPoints).observe(document.documentElement, {attributes:true, attributeFilter:["data-theme"]});
+</script>
+
+</body>
+</html>
