@@ -13,7 +13,7 @@
   --ground:#F2F4F3; --panel:#FFFFFF; --ink:#18252B; --muted:#5A6B70; --line:#D5DDDA;
   --land:#DCE3E0; --land-edge:#B9C6C1; --land-other:#E9EDEB; --sea:#F2F4F3;
   --accent:#0B5E6B;
-  --l-mill:#C2410C; --l-nub:#1D4ED8; --l-indie:#0F766E; --l-letter:#7C3AED; --l-desert:#B91C1C; --l-import:#A16207;
+  --l-mill:#C2410C; --l-nub:#1D4ED8; --l-indie:#0F766E; --l-letter:#7C3AED; --l-desert:#B91C1C; --l-import:#A16207; --l-flag:#6B7A80;
   --chip:#E8EEEC; --focus:#0B5E6B;
   --serif:"Newsreader", Georgia, "Times New Roman", serif;
   --sans:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -25,7 +25,7 @@
     --ground:#0F1719; --panel:#162124; --ink:#E4ECEA; --muted:#98AAA7; --line:#2A393C;
     --land:#23353A; --land-edge:#3A5157; --land-other:#1B2A2E; --sea:#0F1719;
     --accent:#5CC6D3;
-    --l-mill:#FB8A4C; --l-nub:#7AA2FF; --l-indie:#3CCBB6; --l-letter:#B69AFB; --l-desert:#F87171; --l-import:#E5B64A;
+    --l-mill:#FB8A4C; --l-nub:#7AA2FF; --l-indie:#3CCBB6; --l-letter:#B69AFB; --l-desert:#F87171; --l-import:#E5B64A; --l-flag:#9AAAB0;
     --chip:#1F2E31; --focus:#5CC6D3;
   }
 }
@@ -34,7 +34,7 @@
   --ground:#0F1719; --panel:#162124; --ink:#E4ECEA; --muted:#98AAA7; --line:#2A393C;
   --land:#23353A; --land-edge:#3A5157; --land-other:#1B2A2E; --sea:#0F1719;
   --accent:#5CC6D3;
-  --l-mill:#FB8A4C; --l-nub:#7AA2FF; --l-indie:#3CCBB6; --l-letter:#B69AFB; --l-desert:#F87171; --l-import:#E5B64A;
+  --l-mill:#FB8A4C; --l-nub:#7AA2FF; --l-indie:#3CCBB6; --l-letter:#B69AFB; --l-desert:#F87171; --l-import:#E5B64A; --l-flag:#9AAAB0;
   --chip:#1F2E31; --focus:#5CC6D3;
 }
 *{box-sizing:border-box}
@@ -59,28 +59,37 @@ nav.tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px}
 nav.tabs button{font:500 14px var(--sans);color:var(--muted);background:none;border:1px solid transparent;border-radius:5px;padding:7px 14px;cursor:pointer}
 nav.tabs button[aria-selected="true"]{color:var(--ink);background:var(--panel);border-color:var(--line)}
 nav.tabs button:hover{color:var(--ink)}
-.grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
-@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);grid-template-areas:"map detail" "map list";grid-template-rows:auto 1fr;gap:16px;align-items:start}
+.mapcard{grid-area:map}.detail{grid-area:detail}.listcard{grid-area:list}
+@media (max-width:860px){.grid{grid-template-columns:1fr;grid-template-areas:"map" "detail" "list";grid-template-rows:auto}}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:6px}
-.mapbox{position:relative;overflow:hidden;touch-action:none}
-.mapbox svg{display:block;width:100%;height:auto;max-height:78vh;cursor:grab;user-select:none}
+.mapbox{position:relative;overflow:hidden;touch-action:pan-x pan-y pinch-zoom}
+.mapbox.zoomed{touch-action:none}
+.mapbox svg{display:block;width:100%;height:auto;max-height:72vh;user-select:none;-webkit-user-select:none}
+.mapbox.zoomed svg{cursor:grab}
+@media (max-width:860px){.mapbox svg{max-height:62vh}}
+.maphint{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:var(--ink);color:var(--panel);font-size:13px;padding:6px 10px;border-radius:5px;pointer-events:none;opacity:0;transition:opacity .2s;max-width:calc(100% - 24px);text-align:center}
+.maphint.on{opacity:.92}
 .mapbox svg.dragging{cursor:grabbing}
 .land{fill:var(--land);stroke:var(--land-edge);stroke-width:1;vector-effect:non-scaling-stroke}
 .land.other{fill:var(--land-other)}
 .grat{stroke:var(--line);stroke-width:.6;fill:none;vector-effect:non-scaling-stroke;stroke-dasharray:2 4}
-.gratlbl{font:10px var(--mono);fill:var(--muted)}
+.gratlbl{font:17px var(--mono);fill:var(--muted)}
 .pt{cursor:pointer}
 .pt circle{stroke:var(--panel);stroke-width:1.5;vector-effect:non-scaling-stroke}
 .pt.desert circle{fill:none;stroke-width:2.2;stroke-dasharray:3 2}
 .pt.sel circle{stroke:var(--ink);stroke-width:2.5}
 .pt.desert.sel circle{stroke-dasharray:none}
+.pt.flag circle{fill:none;stroke-width:2;stroke-dasharray:1 3}
+.pt.flag.sel circle{stroke-dasharray:none}
 .maptools{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:4px}
-.maptools button{width:32px;height:32px;border-radius:5px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:600 16px var(--sans);cursor:pointer}
-.legend{padding:12px 14px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:6px 8px}
+.maptools button{width:40px;height:40px;border-radius:5px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:600 16px var(--sans);cursor:pointer}
+.legend{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:6px 8px}
 .lg{display:inline-flex;align-items:center;gap:7px;font-size:13px;padding:4px 9px 4px 7px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
 .lg[aria-pressed="false"]{opacity:.45}
 .lg i{width:10px;height:10px;border-radius:50%;display:inline-block}
 .lg i.ring{background:none!important;border:2px dashed currentColor}
+.lg i.dot{background:none!important;border:2px dotted currentColor}
 .lg small{font:11px var(--mono);color:var(--muted)}
 .side{display:flex;flex-direction:column;gap:12px}
 .detail{padding:16px}
@@ -99,11 +108,13 @@ input[type=search]{flex:1 1 160px}
 .row:hover,.row.sel{background:var(--chip)}
 .row i{width:10px;height:10px;border-radius:50%}
 .row i.ring{border:2px dashed;background:none!important}
+.row i.dot{border:2px dotted;background:none!important}
 .row b{font-weight:500;display:block}
 .row span{font-size:12.5px;color:var(--muted)}
 .empty{padding:16px 14px;color:var(--muted);font-size:14px}
 .note{font-size:13px;color:var(--muted);padding:12px 14px;border-top:1px solid var(--line)}
 section[hidden]{display:none}
+.changes{margin:0;padding-left:18px;font-size:14px}
 .tablewrap{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:13.5px}
 th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
@@ -127,6 +138,22 @@ ol.steps li::before{content:counter(s);font:600 14px var(--mono);color:var(--acc
 .btn.primary{background:var(--accent);color:var(--panel);border-color:var(--accent)}
 .msg{font-size:13px;color:var(--muted);min-height:1.2em}
 footer{margin-top:28px;font-size:12.5px;color:var(--muted)}
+@media (max-width:600px){
+  .wrap{padding-block:14px 40px}
+  header.top p{font-size:14px}
+  .stats{grid-template-columns:1fr 1fr;margin:14px 0}
+  .stat:last-child{grid-column:1/-1}
+  .stat b{font-size:20px}
+}
+@media (max-width:700px){
+  #srctable thead{display:none}
+  #srctable tr{display:block;padding:12px 14px;border-bottom:1px solid var(--line)}
+  #srctable td{display:grid;grid-template-columns:84px 1fr;gap:10px;border:0;padding:3px 0}
+  #srctable td::before{content:attr(data-label);color:var(--muted);font:500 11px/1.6 var(--mono);text-transform:uppercase;letter-spacing:.06em}
+  #srctable td:first-child{display:block;padding-bottom:6px;font-size:15px}
+  #srctable td:first-child::before{content:none}
+  #srctable td .pill{justify-self:start}
+}
 @media (prefers-reduced-motion: no-preference){.pt circle{transition:r .15s}}
 </style>
 
@@ -139,7 +166,7 @@ footer{margin-top:28px;font-size:12.5px;color:var(--muted)}
       <h1>UK News Desert Atlas</h1>
       <p>Where local news exists, where it has gone, and where newsletters are filling the gaps. Built from published research as of September 2026. Add the PINF outlet file to see every district.</p>
     </div>
-    <span class="ver" id="appver">App v1.0.0</span>
+    <span class="ver" id="appver">App v1.1.0</span>
   </header>
 
   <div class="stats" aria-label="Headline figures">
@@ -162,26 +189,25 @@ footer{margin-top:28px;font-size:12.5px;color:var(--muted)}
   <!-- MAP -->
   <section id="p-map" role="tabpanel">
     <div class="grid">
-      <div class="card">
-        <div class="mapbox">
+      <div class="card mapcard">
+        <div class="legend" id="legend"></div>
+        <div class="mapbox" id="mapbox">
           <svg id="map" viewBox="0 0 800 1130" role="img" aria-label="Map of the UK showing local news outlets, newsletters and named news deserts"></svg>
           <div class="maptools">
             <button id="zin" aria-label="Zoom in">+</button>
             <button id="zout" aria-label="Zoom out">−</button>
             <button id="zreset" aria-label="Reset view" style="font-size:12px">⟲</button>
           </div>
+          <div class="maphint" id="maphint" aria-hidden="true"></div>
         </div>
-        <div class="legend" id="legend"></div>
       </div>
-      <div class="side">
-        <div class="card detail" id="detail"></div>
-        <div class="card">
+      <div class="card detail" id="detail" tabindex="-1"></div>
+      <div class="card listcard">
           <div class="listhead">
             <input type="search" id="q" placeholder="Search places or titles" aria-label="Search places or titles">
           </div>
           <div class="rows" id="rows"></div>
           <div class="note">The map shows records named in the sources, not a complete census. Nub News runs about 25 towns; only the 2026 launches are confirmed here. Import the PINF file for full district coverage.</div>
-        </div>
       </div>
     </div>
   </section>
@@ -284,12 +310,19 @@ footer{margin-top:28px;font-size:12.5px;color:var(--muted)}
     <div class="cols2">
       <div class="card import">
         <h2>Add your own data</h2>
-        <p style="margin:0;color:var(--muted);font-size:14px">Load a CSV such as the PINF outlet file or your own newsletter search results. Columns are matched by name: <span class="mono">name</span>, <span class="mono">lat</span>/<span class="mono">latitude</span>, <span class="mono">lon</span>/<span class="mono">lng</span>/<span class="mono">longitude</span>, and optionally <span class="mono">place</span>, <span class="mono">type</span>, <span class="mono">url</span>, <span class="mono">notes</span>. Rows without coordinates are placed if the place name matches one already on the map.</p>
+        <p style="margin:0;color:var(--muted);font-size:14px">Load a CSV such as the PINF outlet file or your own newsletter search results. Columns are matched by name. You need a <span class="mono">name</span> column, plus one way to place each row:</p>
+        <ul style="margin:0;padding-left:18px;font-size:14px;color:var(--muted)">
+          <li><span class="mono">lat</span> and <span class="mono">lon</span> columns, or</li>
+          <li>a district code such as <span class="mono">E08000037</span> (column <span class="mono">lad_code</span>, <span class="mono">code</span> or <span class="mono">LAD23CD</span>), or</li>
+          <li>a district or place name (column <span class="mono">local_authority</span>, <span class="mono">district</span>, <span class="mono">lad_name</span> or <span class="mono">place</span>). All 404 UK districts are recognised, including the 2019–2023 mergers.</li>
+        </ul>
+        <p style="margin:0;color:var(--muted);font-size:14px">Rows placed by district sit at the district centre. Optional columns: <span class="mono">type</span>, <span class="mono">url</span>, <span class="mono">notes</span>.</p>
         <input type="file" id="file" accept=".csv,text/csv" aria-label="Choose a CSV file">
         <label for="paste" class="eyebrow">Or paste CSV</label>
         <textarea id="paste">name,place,lat,lon,type,url,notes
 Example Town Bulletin,Kendal,54.33,-2.75,newsletter,,Example row — replace with your own
-Example Valley Post,Brecon,51.95,-3.39,newsletter,,Example row — replace with your own</textarea>
+Example Valley Post,Brecon,51.95,-3.39,newsletter,,Example row — replace with your own
+Example District Weekly,Gateshead,,,newsletter,,Placed by district name</textarea>
         <div class="btns">
           <button class="btn primary" id="loadpaste">Add to map</button>
           <button class="btn" id="clearimp">Remove imported rows</button>
@@ -314,6 +347,11 @@ Example Valley Post,Brecon,51.95,-3.39,newsletter,,Example row — replace with 
         <p>A working tool for assessing local news provision across the UK. It combines the published figures from the Public Interest News Foundation, BBC Local News Partnerships, DCMS and the trade press with a hand-built layer of newsletter networks.</p>
         <p>Points mark a town or city centre, not a coverage area. News desert markers sit at the district centre. Coordinates are approximate.</p>
         <p>Research compiled 25 September 2026. Figures change often; check the linked sources before quoting them.</p>
+        <h3 style="margin-top:14px">Changes</h3>
+        <ul class="changes">
+          <li><b>1.1.0</b> (25 Sep 2026): map no longer traps scrolling; Ctrl/⌘ + scroll or the buttons zoom. Disputed and thin districts moved to their own layer, off by default. Larger tap targets and nearest-point tapping. Import places rows by district name or code. List taps scroll to the map on phones. Legend moved above the map. Sources table becomes cards on phones.</li>
+          <li><b>1.0.0</b> (25 Sep 2026): first release.</li>
+        </ul>
       </div>
       <div class="card">
         <div class="tablewrap">
@@ -327,19 +365,21 @@ Example Valley Post,Brecon,51.95,-3.39,newsletter,,Example row — replace with 
 </div>
 
 <script>
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.1.0";
+const GAZ = {"n":{"Hartlepool":[54.669,-1.259],"Middlesbrough":[54.542,-1.222],"Redcar and Cleveland":[54.552,-1.021],"Stockton-on-Tees":[54.577,-1.338],"Darlington":[54.549,-1.553],"Halton":[53.332,-2.68],"Warrington":[53.399,-2.563],"Blackburn with Darwen":[53.693,-2.468],"Blackpool":[53.818,-3.029],"Kingston upon Hull, City of":[53.772,-0.302],"East Riding of Yorkshire":[53.886,-0.467],"North East Lincolnshire":[53.543,-0.138],"North Lincolnshire":[53.602,-0.509],"York":[53.959,-1.061],"Derby":[52.913,-1.468],"Leicester":[52.638,-1.128],"Rutland":[52.661,-0.655],"Nottingham":[52.961,-1.177],"Herefordshire, County of":[52.104,-2.745],"Telford and Wrekin":[52.73,-2.489],"Stoke-on-Trent":[53.018,-2.165],"Bath and North East Somerset":[51.356,-2.475],"Bristol, City of":[51.467,-2.6],"North Somerset":[51.39,-2.794],"South Gloucestershire":[51.542,-2.457],"Plymouth":[50.392,-4.118],"Torbay":[50.442,-3.554],"Bournemouth":[50.742,-1.86],"Poole":[50.745,-1.963],"Swindon":[51.572,-1.744],"Peterborough":[52.609,-0.253],"Luton":[51.894,-0.426],"Southend-on-Sea":[51.548,0.711],"Thurrock":[51.509,0.367],"Medway":[51.438,0.553],"Bracknell Forest":[51.408,-0.74],"West Berkshire":[51.45,-1.304],"Reading":[51.453,-0.984],"Slough":[51.508,-0.586],"Windsor and Maidenhead":[51.486,-0.7],"Wokingham":[51.429,-0.884],"Milton Keynes":[52.084,-0.734],"Brighton and Hove":[50.845,-0.134],"Portsmouth":[50.805,-1.071],"Southampton":[50.92,-1.399],"Isle of Wight":[50.675,-1.298],"County Durham":[54.695,-1.84],"Cheshire East":[53.18,-2.349],"Cheshire West and Chester":[53.197,-2.731],"Shropshire":[52.635,-2.734],"Cornwall":[50.407,-4.825],"Isles of Scilly":[49.921,-6.298],"Wiltshire":[51.298,-1.945],"Bedford":[52.189,-0.477],"Central Bedfordshire":[52.007,-0.436],"Northumberland":[55.236,-2.069],"Aylesbury Vale":[51.892,-0.885],"Chiltern":[51.681,-0.628],"South Bucks":[51.556,-0.59],"Wycombe":[51.649,-0.815],"Cambridge":[52.199,0.133],"East Cambridgeshire":[52.339,0.304],"Fenland":[52.534,0.057],"Huntingdonshire":[52.374,-0.221],"South Cambridgeshire":[52.174,0.083],"Allerdale":[54.704,-3.242],"Barrow-in-Furness":[54.148,-3.196],"Carlisle":[54.971,-2.804],"Copeland":[54.42,-3.373],"Eden":[54.613,-2.622],"South Lakeland":[54.313,-2.831],"Amber Valley":[53.029,-1.467],"Bolsover":[53.216,-1.277],"Chesterfield":[53.256,-1.401],"Derbyshire Dales":[53.128,-1.694],"Erewash":[52.936,-1.347],"High Peak":[53.373,-1.874],"North East Derbyshire":[53.226,-1.448],"South Derbyshire":[52.831,-1.56],"East Devon":[50.765,-3.223],"Exeter":[50.722,-3.511],"Mid Devon":[50.876,-3.556],"North Devon":[51.069,-3.911],"South Hams":[50.375,-3.823],"Teignbridge":[50.607,-3.658],"Torridge":[50.885,-4.248],"West Devon":[50.657,-4.046],"Christchurch":[50.763,-1.789],"East Dorset":[50.864,-1.962],"North Dorset":[50.913,-2.246],"Purbeck":[50.681,-2.139],"West Dorset":[50.785,-2.578],"Weymouth and Portland":[50.635,-2.46],"Eastbourne":[50.777,0.266],"Hastings":[50.87,0.57],"Lewes":[50.883,0.005],"Rother":[50.952,0.537],"Wealden":[50.968,0.198],"Basildon":[51.59,0.466],"Braintree":[51.942,0.59],"Brentwood":[51.639,0.311],"Castle Point":[51.56,0.586],"Chelmsford":[51.726,0.481],"Colchester":[51.881,0.852],"Epping Forest":[51.709,0.149],"Harlow":[51.768,0.109],"Maldon":[51.71,0.769],"Rochford":[51.597,0.711],"Tendring":[51.87,1.109],"Uttlesford":[51.935,0.28],"Cheltenham":[51.897,-2.074],"Cotswold":[51.817,-1.892],"Forest of Dean":[51.837,-2.487],"Gloucester":[51.849,-2.24],"Stroud":[51.729,-2.295],"Tewkesbury":[51.946,-2.087],"Basingstoke and Deane":[51.273,-1.201],"East Hampshire":[51.075,-0.955],"Eastleigh":[50.938,-1.326],"Fareham":[50.853,-1.222],"Gosport":[50.805,-1.161],"Hart":[51.285,-0.897],"Havant":[50.868,-0.996],"New Forest":[50.86,-1.631],"Rushmoor":[51.273,-0.767],"Test Valley":[51.129,-1.511],"Winchester":[51.028,-1.221],"Broxbourne":[51.725,-0.047],"Dacorum":[51.778,-0.541],"Hertsmere":[51.677,-0.281],"North Hertfordshire":[51.959,-0.193],"Three Rivers":[51.661,-0.461],"Watford":[51.668,-0.403],"Ashford":[51.125,0.811],"Canterbury":[51.281,1.105],"Dartford":[51.43,0.252],"Dover":[51.211,1.287],"Gravesham":[51.402,0.395],"Maidstone":[51.235,0.581],"Sevenoaks":[51.275,0.172],"Shepway":[51.056,0.994],"Swale":[51.315,0.812],"Thanet":[51.354,1.338],"Tonbridge and Malling":[51.267,0.343],"Tunbridge Wells":[51.114,0.431],"Burnley":[53.779,-2.222],"Chorley":[53.661,-2.647],"Fylde":[53.788,-2.914],"Hyndburn":[53.759,-2.39],"Lancaster":[54.071,-2.692],"Pendle":[53.865,-2.185],"Preston":[53.812,-2.697],"Ribble Valley":[53.907,-2.445],"Rossendale":[53.694,-2.267],"South Ribble":[53.728,-2.709],"West Lancashire":[53.599,-2.87],"Wyre":[53.9,-2.807],"Blaby":[52.572,-1.222],"Charnwood":[52.737,-1.146],"Harborough":[52.539,-1.008],"Hinckley and Bosworth":[52.617,-1.391],"Melton":[52.796,-0.856],"North West Leicestershire":[52.753,-1.405],"Oadby and Wigston":[52.587,-1.093],"Boston":[52.973,-0.038],"East Lindsey":[53.251,0.023],"Lincoln":[53.225,-0.555],"North Kesteven":[53.081,-0.446],"South Holland":[52.789,-0.059],"South Kesteven":[52.854,-0.518],"West Lindsey":[53.393,-0.476],"Breckland":[52.588,0.837],"Broadland":[52.701,1.31],"Great Yarmouth":[52.673,1.65],"King's Lynn and West Norfolk":[52.731,0.535],"North Norfolk":[52.847,1.176],"Norwich":[52.633,1.277],"South Norfolk":[52.514,1.272],"Corby":[52.499,-0.696],"Daventry":[52.316,-1.048],"East Northamptonshire":[52.458,-0.523],"Kettering":[52.426,-0.765],"Northampton":[52.241,-0.887],"South Northamptonshire":[52.123,-1.043],"Wellingborough":[52.288,-0.712],"Craven":[54.08,-2.175],"Hambleton":[54.287,-1.319],"Harrogate":[54.067,-1.596],"Richmondshire":[54.362,-1.934],"Ryedale":[54.211,-0.852],"Scarborough":[54.367,-0.637],"Selby":[53.776,-1.169],"Ashfield":[53.092,-1.259],"Bassetlaw":[53.333,-0.959],"Broxtowe":[52.976,-1.262],"Gedling":[53.028,-1.119],"Mansfield":[53.171,-1.173],"Newark and Sherwood":[53.124,-0.92],"Rushcliffe":[52.901,-1.038],"Cherwell":[51.959,-1.276],"Oxford":[51.755,-1.241],"South Oxfordshire":[51.634,-1.071],"Vale of White Horse":[51.634,-1.442],"West Oxfordshire":[51.838,-1.507],"Mendip":[51.203,-2.545],"Sedgemoor":[51.208,-2.891],"South Somerset":[50.988,-2.71],"Taunton Deane":[51.01,-3.161],"West Somerset":[51.132,-3.497],"Cannock Chase":[52.712,-1.98],"East Staffordshire":[52.863,-1.812],"Lichfield":[52.688,-1.805],"Newcastle-under-Lyme":[52.993,-2.319],"South Staffordshire":[52.626,-2.177],"Stafford":[52.848,-2.176],"Staffordshire Moorlands":[53.079,-1.981],"Tamworth":[52.626,-1.678],"Babergh":[52.053,0.908],"Forest Heath":[52.355,0.532],"Ipswich":[52.056,1.16],"Mid Suffolk":[52.247,1.093],"St Edmundsbury":[52.233,0.674],"Suffolk Coastal":[52.165,1.41],"Waveney":[52.405,1.565],"Elmbridge":[51.357,-0.392],"Epsom and Ewell":[51.339,-0.261],"Guildford":[51.248,-0.562],"Mole Valley":[51.212,-0.325],"Reigate and Banstead":[51.253,-0.192],"Runnymede":[51.394,-0.541],"Spelthorne":[51.425,-0.468],"Surrey Heath":[51.343,-0.671],"Tandridge":[51.227,-0.043],"Waverley":[51.15,-0.633],"Woking":[51.314,-0.561],"North Warwickshire":[52.548,-1.628],"Nuneaton and Bedworth":[52.501,-1.476],"Rugby":[52.384,-1.328],"Stratford-on-Avon":[52.179,-1.623],"Warwick":[52.31,-1.585],"Adur":[50.844,-0.325],"Arun":[50.836,-0.633],"Chichester":[50.943,-0.736],"Crawley":[51.125,-0.182],"Horsham":[50.995,-0.363],"Mid Sussex":[51.021,-0.127],"Worthing":[50.83,-0.396],"Bromsgrove":[52.362,-2.016],"Malvern Hills":[52.183,-2.345],"Redditch":[52.282,-1.952],"Worcester":[52.197,-2.211],"Wychavon":[52.164,-2.051],"Wyre Forest":[52.38,-2.275],"St Albans":[51.772,-0.342],"Welwyn Hatfield":[51.767,-0.194],"East Hertfordshire":[51.865,-0.008],"Stevenage":[51.904,-0.189],"Bolton":[53.579,-2.467],"Bury":[53.588,-2.313],"Manchester":[53.452,-2.232],"Oldham":[53.552,-2.051],"Rochdale":[53.617,-2.158],"Salford":[53.49,-2.37],"Stockport":[53.394,-2.128],"Tameside":[53.477,-2.063],"Trafford":[53.419,-2.355],"Wigan":[53.524,-2.59],"Knowsley":[53.425,-2.834],"Liverpool":[53.404,-2.917],"St. Helens":[53.459,-2.724],"Sefton":[53.549,-3.004],"Wirral":[53.364,-3.069],"Barnsley":[53.536,-1.533],"Doncaster":[53.544,-1.096],"Rotherham":[53.409,-1.286],"Sheffield":[53.404,-1.55],"Newcastle upon Tyne":[55.008,-1.658],"North Tyneside":[55.028,-1.519],"South Tyneside":[54.963,-1.444],"Sunderland":[54.863,-1.437],"Birmingham":[52.489,-1.875],"Coventry":[52.417,-1.52],"Dudley":[52.483,-2.109],"Sandwell":[52.515,-2.009],"Solihull":[52.413,-1.727],"Walsall":[52.599,-1.966],"Wolverhampton":[52.589,-2.121],"Bradford":[53.845,-1.855],"Calderdale":[53.721,-1.973],"Kirklees":[53.627,-1.763],"Leeds":[53.826,-1.506],"Wakefield":[53.661,-1.412],"Gateshead":[54.935,-1.683],"City of London":[51.515,-0.092],"Barking and Dagenham":[51.545,0.134],"Barnet":[51.616,-0.21],"Bexley":[51.459,0.14],"Brent":[51.559,-0.268],"Bromley":[51.372,0.052],"Camden":[51.546,-0.157],"Croydon":[51.355,-0.087],"Ealing":[51.522,-0.331],"Enfield":[51.651,-0.087],"Greenwich":[51.473,0.057],"Hackney":[51.552,-0.063],"Hammersmith and Fulham":[51.496,-0.221],"Haringey":[51.59,-0.107],"Harrow":[51.598,-0.341],"Havering":[51.564,0.221],"Hillingdon":[51.541,-0.446],"Hounslow":[51.468,-0.367],"Islington":[51.548,-0.11],"Kensington and Chelsea":[51.502,-0.193],"Kingston upon Thames":[51.388,-0.287],"Lambeth":[51.453,-0.118],"Lewisham":[51.448,-0.02],"Merton":[51.41,-0.197],"Newham":[51.528,0.036],"Redbridge":[51.586,0.076],"Richmond upon Thames":[51.442,-0.313],"Southwark":[51.473,-0.075],"Sutton":[51.362,-0.178],"Tower Hamlets":[51.517,-0.036],"Waltham Forest":[51.594,-0.013],"Wandsworth":[51.451,-0.186],"Westminster":[51.514,-0.161],"Clackmannanshire":[56.152,-3.74],"Dumfries and Galloway":[55.077,-3.961],"East Ayrshire":[55.485,-4.314],"East Lothian":[55.94,-2.72],"East Renfrewshire":[55.753,-4.36],"Eilean Siar":[58.133,-6.659],"Falkirk":[55.995,-3.798],"Fife":[56.229,-3.127],"Highland":[57.597,-4.642],"Inverclyde":[55.901,-4.744],"Midlothian":[55.832,-3.11],"Moray":[57.474,-3.265],"North Ayrshire":[55.725,-4.73],"Orkney Islands":[58.992,-3.098],"Perth and Kinross":[56.567,-3.824],"Scottish Borders":[55.576,-2.788],"Shetland Islands":[60.296,-1.346],"South Ayrshire":[55.268,-4.688],"South Lanarkshire":[55.613,-3.811],"Stirling":[56.244,-4.341],"Aberdeen City":[57.157,-2.187],"Aberdeenshire":[57.241,-2.631],"Argyll and Bute":[56.083,-5.213],"City of Edinburgh":[55.924,-3.288],"Renfrewshire":[55.846,-4.543],"West Dunbartonshire":[55.987,-4.517],"West Lothian":[55.884,-3.574],"Angus":[56.725,-2.921],"Dundee City":[56.478,-2.97],"North Lanarkshire":[55.875,-3.948],"East Dunbartonshire":[55.956,-4.226],"Glasgow City":[55.875,-4.225],"Isle of Anglesey":[53.287,-4.361],"Gwynedd":[52.893,-4.021],"Conwy":[53.138,-3.735],"Denbighshire":[53.09,-3.353],"Flintshire":[53.207,-3.172],"Wrexham":[52.99,-3.018],"Ceredigion":[52.255,-4.07],"Pembrokeshire":[51.856,-4.884],"Carmarthenshire":[51.905,-4.158],"Swansea":[51.644,-4.051],"Neath Port Talbot":[51.682,-3.742],"Bridgend":[51.557,-3.598],"Vale of Glamorgan":[51.446,-3.399],"Cardiff":[51.511,-3.204],"Rhondda Cynon Taf":[51.65,-3.436],"Caerphilly":[51.653,-3.205],"Blaenau Gwent":[51.767,-3.194],"Torfaen":[51.699,-3.053],"Monmouthshire":[51.766,-2.872],"Newport":[51.586,-2.9],"Powys":[52.326,-3.41],"Merthyr Tydfil":[51.741,-3.361],"Bournemouth, Christchurch and Poole":[50.75,-1.871],"Dorset":[50.776,-2.277],"Buckinghamshire":[51.695,-0.729],"North Northamptonshire":[52.418,-0.674],"West Northamptonshire":[52.227,-0.993],"Cumberland":[54.698,-3.14],"Westmorland and Furness":[54.358,-2.883],"North Yorkshire":[54.164,-1.383],"Somerset":[51.108,-2.961],"East Suffolk":[52.285,1.487],"West Suffolk":[52.294,0.603],"Somerset West and Taunton":[51.071,-3.329],"Folkestone and Hythe":[51.056,0.994],"Antrim and Newtownabbey":[54.72,-6.2],"Ards and North Down":[54.55,-5.62],"Armagh City, Banbridge and Craigavon":[54.37,-6.45],"Belfast":[54.6,-5.93],"Causeway Coast and Glens":[55.05,-6.5],"Derry City and Strabane":[54.85,-7.3],"Fermanagh and Omagh":[54.45,-7.5],"Lisburn and Castlereagh":[54.5,-6.05],"Mid and East Antrim":[54.9,-6.1],"Mid Ulster":[54.65,-6.75],"Newry, Mourne and Down":[54.25,-6.0]},"c":{"E06000001":"Hartlepool","E06000002":"Middlesbrough","E06000003":"Redcar and Cleveland","E06000004":"Stockton-on-Tees","E06000005":"Darlington","E06000006":"Halton","E06000007":"Warrington","E06000008":"Blackburn with Darwen","E06000009":"Blackpool","E06000010":"Kingston upon Hull, City of","E06000011":"East Riding of Yorkshire","E06000012":"North East Lincolnshire","E06000013":"North Lincolnshire","E06000014":"York","E06000015":"Derby","E06000016":"Leicester","E06000017":"Rutland","E06000018":"Nottingham","E06000019":"Herefordshire, County of","E06000020":"Telford and Wrekin","E06000021":"Stoke-on-Trent","E06000022":"Bath and North East Somerset","E06000023":"Bristol, City of","E06000024":"North Somerset","E06000025":"South Gloucestershire","E06000026":"Plymouth","E06000027":"Torbay","E06000028":"Bournemouth","E06000029":"Poole","E06000030":"Swindon","E06000031":"Peterborough","E06000032":"Luton","E06000033":"Southend-on-Sea","E06000034":"Thurrock","E06000035":"Medway","E06000036":"Bracknell Forest","E06000037":"West Berkshire","E06000038":"Reading","E06000039":"Slough","E06000040":"Windsor and Maidenhead","E06000041":"Wokingham","E06000042":"Milton Keynes","E06000043":"Brighton and Hove","E06000044":"Portsmouth","E06000045":"Southampton","E06000046":"Isle of Wight","E06000047":"County Durham","E06000049":"Cheshire East","E06000050":"Cheshire West and Chester","E06000051":"Shropshire","E06000052":"Cornwall","E06000053":"Isles of Scilly","E06000054":"Wiltshire","E06000055":"Bedford","E06000056":"Central Bedfordshire","E06000057":"Northumberland","E07000004":"Aylesbury Vale","E07000005":"Chiltern","E07000006":"South Bucks","E07000007":"Wycombe","E07000008":"Cambridge","E07000009":"East Cambridgeshire","E07000010":"Fenland","E07000011":"Huntingdonshire","E07000012":"South Cambridgeshire","E07000026":"Allerdale","E07000027":"Barrow-in-Furness","E07000028":"Carlisle","E07000029":"Copeland","E07000030":"Eden","E07000031":"South Lakeland","E07000032":"Amber Valley","E07000033":"Bolsover","E07000034":"Chesterfield","E07000035":"Derbyshire Dales","E07000036":"Erewash","E07000037":"High Peak","E07000038":"North East Derbyshire","E07000039":"South Derbyshire","E07000040":"East Devon","E07000041":"Exeter","E07000042":"Mid Devon","E07000043":"North Devon","E07000044":"South Hams","E07000045":"Teignbridge","E07000046":"Torridge","E07000047":"West Devon","E07000048":"Christchurch","E07000049":"East Dorset","E07000050":"North Dorset","E07000051":"Purbeck","E07000052":"West Dorset","E07000053":"Weymouth and Portland","E07000061":"Eastbourne","E07000062":"Hastings","E07000063":"Lewes","E07000064":"Rother","E07000065":"Wealden","E07000066":"Basildon","E07000067":"Braintree","E07000068":"Brentwood","E07000069":"Castle Point","E07000070":"Chelmsford","E07000071":"Colchester","E07000072":"Epping Forest","E07000073":"Harlow","E07000074":"Maldon","E07000075":"Rochford","E07000076":"Tendring","E07000077":"Uttlesford","E07000078":"Cheltenham","E07000079":"Cotswold","E07000080":"Forest of Dean","E07000081":"Gloucester","E07000082":"Stroud","E07000083":"Tewkesbury","E07000084":"Basingstoke and Deane","E07000085":"East Hampshire","E07000086":"Eastleigh","E07000087":"Fareham","E07000088":"Gosport","E07000089":"Hart","E07000090":"Havant","E07000091":"New Forest","E07000092":"Rushmoor","E07000093":"Test Valley","E07000094":"Winchester","E07000095":"Broxbourne","E07000096":"Dacorum","E07000098":"Hertsmere","E07000099":"North Hertfordshire","E07000102":"Three Rivers","E07000103":"Watford","E07000105":"Ashford","E07000106":"Canterbury","E07000107":"Dartford","E07000108":"Dover","E07000109":"Gravesham","E07000110":"Maidstone","E07000111":"Sevenoaks","E07000112":"Shepway","E07000113":"Swale","E07000114":"Thanet","E07000115":"Tonbridge and Malling","E07000116":"Tunbridge Wells","E07000117":"Burnley","E07000118":"Chorley","E07000119":"Fylde","E07000120":"Hyndburn","E07000121":"Lancaster","E07000122":"Pendle","E07000123":"Preston","E07000124":"Ribble Valley","E07000125":"Rossendale","E07000126":"South Ribble","E07000127":"West Lancashire","E07000128":"Wyre","E07000129":"Blaby","E07000130":"Charnwood","E07000131":"Harborough","E07000132":"Hinckley and Bosworth","E07000133":"Melton","E07000134":"North West Leicestershire","E07000135":"Oadby and Wigston","E07000136":"Boston","E07000137":"East Lindsey","E07000138":"Lincoln","E07000139":"North Kesteven","E07000140":"South Holland","E07000141":"South Kesteven","E07000142":"West Lindsey","E07000143":"Breckland","E07000144":"Broadland","E07000145":"Great Yarmouth","E07000146":"King's Lynn and West Norfolk","E07000147":"North Norfolk","E07000148":"Norwich","E07000149":"South Norfolk","E07000150":"Corby","E07000151":"Daventry","E07000152":"East Northamptonshire","E07000153":"Kettering","E07000154":"Northampton","E07000155":"South Northamptonshire","E07000156":"Wellingborough","E07000163":"Craven","E07000164":"Hambleton","E07000165":"Harrogate","E07000166":"Richmondshire","E07000167":"Ryedale","E07000168":"Scarborough","E07000169":"Selby","E07000170":"Ashfield","E07000171":"Bassetlaw","E07000172":"Broxtowe","E07000173":"Gedling","E07000174":"Mansfield","E07000175":"Newark and Sherwood","E07000176":"Rushcliffe","E07000177":"Cherwell","E07000178":"Oxford","E07000179":"South Oxfordshire","E07000180":"Vale of White Horse","E07000181":"West Oxfordshire","E07000187":"Mendip","E07000188":"Sedgemoor","E07000189":"South Somerset","E07000190":"Taunton Deane","E07000191":"West Somerset","E07000192":"Cannock Chase","E07000193":"East Staffordshire","E07000194":"Lichfield","E07000195":"Newcastle-under-Lyme","E07000196":"South Staffordshire","E07000197":"Stafford","E07000198":"Staffordshire Moorlands","E07000199":"Tamworth","E07000200":"Babergh","E07000201":"Forest Heath","E07000202":"Ipswich","E07000203":"Mid Suffolk","E07000204":"St Edmundsbury","E07000205":"Suffolk Coastal","E07000206":"Waveney","E07000207":"Elmbridge","E07000208":"Epsom and Ewell","E07000209":"Guildford","E07000210":"Mole Valley","E07000211":"Reigate and Banstead","E07000212":"Runnymede","E07000213":"Spelthorne","E07000214":"Surrey Heath","E07000215":"Tandridge","E07000216":"Waverley","E07000217":"Woking","E07000218":"North Warwickshire","E07000219":"Nuneaton and Bedworth","E07000220":"Rugby","E07000221":"Stratford-on-Avon","E07000222":"Warwick","E07000223":"Adur","E07000224":"Arun","E07000225":"Chichester","E07000226":"Crawley","E07000227":"Horsham","E07000228":"Mid Sussex","E07000229":"Worthing","E07000234":"Bromsgrove","E07000235":"Malvern Hills","E07000236":"Redditch","E07000237":"Worcester","E07000238":"Wychavon","E07000239":"Wyre Forest","E07000240":"St Albans","E07000241":"Welwyn Hatfield","E07000242":"East Hertfordshire","E07000243":"Stevenage","E08000001":"Bolton","E08000002":"Bury","E08000003":"Manchester","E08000004":"Oldham","E08000005":"Rochdale","E08000006":"Salford","E08000007":"Stockport","E08000008":"Tameside","E08000009":"Trafford","E08000010":"Wigan","E08000011":"Knowsley","E08000012":"Liverpool","E08000013":"St. Helens","E08000014":"Sefton","E08000015":"Wirral","E08000016":"Barnsley","E08000017":"Doncaster","E08000018":"Rotherham","E08000019":"Sheffield","E08000021":"Newcastle upon Tyne","E08000022":"North Tyneside","E08000023":"South Tyneside","E08000024":"Sunderland","E08000025":"Birmingham","E08000026":"Coventry","E08000027":"Dudley","E08000028":"Sandwell","E08000029":"Solihull","E08000030":"Walsall","E08000031":"Wolverhampton","E08000032":"Bradford","E08000033":"Calderdale","E08000034":"Kirklees","E08000035":"Leeds","E08000036":"Wakefield","E08000037":"Gateshead","E09000001":"City of London","E09000002":"Barking and Dagenham","E09000003":"Barnet","E09000004":"Bexley","E09000005":"Brent","E09000006":"Bromley","E09000007":"Camden","E09000008":"Croydon","E09000009":"Ealing","E09000010":"Enfield","E09000011":"Greenwich","E09000012":"Hackney","E09000013":"Hammersmith and Fulham","E09000014":"Haringey","E09000015":"Harrow","E09000016":"Havering","E09000017":"Hillingdon","E09000018":"Hounslow","E09000019":"Islington","E09000020":"Kensington and Chelsea","E09000021":"Kingston upon Thames","E09000022":"Lambeth","E09000023":"Lewisham","E09000024":"Merton","E09000025":"Newham","E09000026":"Redbridge","E09000027":"Richmond upon Thames","E09000028":"Southwark","E09000029":"Sutton","E09000030":"Tower Hamlets","E09000031":"Waltham Forest","E09000032":"Wandsworth","E09000033":"Westminster","S12000005":"Clackmannanshire","S12000006":"Dumfries and Galloway","S12000008":"East Ayrshire","S12000010":"East Lothian","S12000011":"East Renfrewshire","S12000013":"Eilean Siar","S12000014":"Falkirk","S12000015":"Fife","S12000017":"Highland","S12000018":"Inverclyde","S12000019":"Midlothian","S12000020":"Moray","S12000021":"North Ayrshire","S12000023":"Orkney Islands","S12000024":"Perth and Kinross","S12000026":"Scottish Borders","S12000027":"Shetland Islands","S12000028":"South Ayrshire","S12000029":"South Lanarkshire","S12000030":"Stirling","S12000033":"Aberdeen City","S12000034":"Aberdeenshire","S12000035":"Argyll and Bute","S12000036":"City of Edinburgh","S12000038":"Renfrewshire","S12000039":"West Dunbartonshire","S12000040":"West Lothian","S12000041":"Angus","S12000042":"Dundee City","S12000044":"North Lanarkshire","S12000045":"East Dunbartonshire","S12000046":"Glasgow City","W06000001":"Isle of Anglesey","W06000002":"Gwynedd","W06000003":"Conwy","W06000004":"Denbighshire","W06000005":"Flintshire","W06000006":"Wrexham","W06000008":"Ceredigion","W06000009":"Pembrokeshire","W06000010":"Carmarthenshire","W06000011":"Swansea","W06000012":"Neath Port Talbot","W06000013":"Bridgend","W06000014":"Vale of Glamorgan","W06000015":"Cardiff","W06000016":"Rhondda Cynon Taf","W06000018":"Caerphilly","W06000019":"Blaenau Gwent","W06000020":"Torfaen","W06000021":"Monmouthshire","W06000022":"Newport","W06000023":"Powys","W06000024":"Merthyr Tydfil","E06000058":"Bournemouth, Christchurch and Poole","E06000059":"Dorset","E06000060":"Buckinghamshire","E06000061":"North Northamptonshire","E06000062":"West Northamptonshire","E06000063":"Cumberland","E06000064":"Westmorland and Furness","E06000065":"North Yorkshire","E06000066":"Somerset","E07000244":"East Suffolk","E07000245":"West Suffolk"}};
 const PATHS = {"uk":"M483.7,938.0L479.7,942.0L465.7,946.0L459.9,950.0L449.5,960.0L447.7,961.0L432.0,959.0L420.4,946.0L412.9,941.0L410.0,940.0L406.5,942.0L399.5,943.0L392.6,943.0L396.6,937.0L401.3,934.0L390.2,932.0L387.3,930.0L383.8,926.0L375.7,925.0L371.6,926.0L364.7,932.0L354.2,937.0L341.5,929.0L338.5,926.0L338.5,919.0L336.8,914.0L333.3,912.0L338.0,905.0L343.2,900.0L355.4,896.0L374.0,885.0L384.4,880.0L393.7,872.0L397.8,867.0L400.7,861.0L403.6,853.0L407.7,846.0L403.6,844.0L401.8,839.0L402.4,834.0L404.2,830.0L402.4,824.0L399.5,818.0L400.1,813.0L400.7,808.0L393.1,809.0L385.6,810.0L379.2,814.0L372.8,818.0L367.0,819.0L367.0,816.0L369.3,811.0L375.7,804.0L383.3,799.0L385.6,794.0L387.3,790.0L390.8,786.0L400.1,778.0L417.5,770.0L420.4,769.0L426.8,770.0L433.8,769.0L439.6,766.0L446.0,765.0L458.8,774.0L454.7,761.0L460.5,757.0L469.2,770.0L472.7,771.0L479.1,769.0L476.2,767.0L473.3,767.0L469.8,765.0L466.3,761.0L460.5,749.0L461.1,741.0L464.6,734.0L468.6,727.0L465.7,725.0L462.8,723.0L462.2,716.0L462.8,709.0L470.4,704.0L472.7,696.0L473.3,686.0L472.1,682.0L465.1,683.0L461.7,685.0L458.2,687.0L454.7,687.0L446.0,677.0L440.8,669.0L431.5,653.0L430.3,644.0L437.3,623.0L448.9,609.0L462.2,605.0L459.9,604.0L439.6,604.0L432.6,605.0L426.2,611.0L422.8,612.0L419.3,613.0L415.8,616.0L412.3,620.0L408.8,622.0L401.8,621.0L398.9,622.0L396.6,620.0L394.3,616.0L392.0,615.0L389.1,616.0L382.7,621.0L376.3,624.0L368.7,621.0L358.9,615.0L357.1,617.0L354.8,623.0L353.6,631.0L346.7,624.0L340.3,614.0L338.5,608.0L338.5,601.0L341.5,599.0L344.9,601.0L350.2,585.0L360.6,564.0L364.7,558.0L367.0,550.0L366.4,545.0L364.1,540.0L354.8,530.0L354.8,522.0L356.0,513.0L358.3,507.0L359.5,506.0L372.8,506.0L367.6,503.0L357.7,495.0L357.7,492.0L360.0,484.0L358.9,485.0L357.1,488.0L352.5,497.0L350.2,499.0L343.2,501.0L342.0,505.0L340.3,507.0L336.8,507.0L336.2,511.0L335.1,511.0L333.9,507.0L333.9,500.0L335.6,493.0L338.0,488.0L348.4,477.0L343.2,480.0L332.2,491.0L326.4,498.0L324.6,500.0L324.0,503.0L324.0,505.0L326.9,517.0L325.8,523.0L315.9,561.0L314.2,565.0L312.4,567.0L310.7,567.0L306.0,567.0L303.7,564.0L303.7,561.0L304.9,556.0L308.9,538.0L310.7,533.0L313.6,528.0L318.8,520.0L318.8,519.0L315.3,521.0L313.6,520.0L312.4,519.0L313.0,495.0L315.9,487.0L317.1,475.0L320.0,465.0L323.5,458.0L325.8,449.0L329.3,444.0L330.4,438.0L334.5,431.0L337.4,424.0L335.6,425.0L315.9,443.0L310.7,447.0L303.7,446.0L297.9,444.0L293.8,439.0L292.1,431.0L286.9,431.0L282.8,429.0L282.8,428.0L288.0,424.0L297.3,422.0L306.0,415.0L298.5,410.0L299.1,408.0L305.4,404.0L314.2,390.0L315.9,377.0L311.8,371.0L310.1,367.0L302.5,362.0L300.8,356.0L302.0,353.0L304.3,350.0L308.4,348.0L314.7,345.0L308.9,343.0L306.6,340.0L305.4,336.0L305.4,333.0L308.4,322.0L310.1,318.0L313.0,312.0L328.1,312.0L329.8,310.0L331.6,309.0L339.1,312.0L338.0,309.0L325.8,296.0L324.6,293.0L328.1,286.0L328.1,282.0L327.5,279.0L328.7,276.0L332.7,275.0L344.9,275.0L347.8,274.0L346.7,270.0L343.8,265.0L343.2,262.0L343.8,258.0L344.4,251.0L344.4,248.0L347.3,243.0L349.6,242.0L353.1,241.0L359.5,243.0L362.4,245.0L365.3,249.0L367.0,249.0L375.7,244.0L378.0,243.0L381.5,249.0L395.5,244.0L414.6,242.0L426.2,239.0L438.4,238.0L449.5,235.0L461.7,237.0L461.7,238.0L461.1,241.0L458.2,248.0L458.8,257.0L458.2,259.0L456.4,262.0L452.4,268.0L440.8,276.0L419.8,295.0L407.1,304.0L405.3,309.0L404.7,315.0L411.7,316.0L414.6,318.0L412.9,321.0L401.8,332.0L398.9,342.0L407.1,342.0L414.0,340.0L428.0,334.0L441.3,329.0L447.1,329.0L459.9,333.0L462.2,333.0L467.5,331.0L472.7,331.0L508.7,332.0L518.0,330.0L525.0,332.0L530.2,339.0L535.4,351.0L535.4,353.0L532.5,358.0L526.1,365.0L521.5,374.0L519.7,379.0L519.1,385.0L517.4,390.0L507.5,414.0L497.7,427.0L493.6,436.0L488.4,444.0L483.1,449.0L477.9,452.0L461.7,455.0L457.6,457.0L452.4,462.0L446.6,464.0L452.9,463.0L459.3,461.0L471.0,460.0L484.9,468.0L483.7,475.0L477.9,480.0L465.7,481.0L454.1,492.0L448.9,495.0L443.7,497.0L436.7,497.0L423.9,494.0L418.7,491.0L423.9,496.0L429.1,498.0L461.7,505.0L463.4,504.0L473.9,497.0L487.8,497.0L513.9,510.0L521.5,519.0L532.5,533.0L538.3,538.0L543.0,543.0L545.3,550.0L550.5,574.0L556.3,597.0L563.9,623.0L567.3,630.0L572.0,634.0L594.6,646.0L599.9,650.0L608.6,661.0L617.3,672.0L625.4,681.0L634.1,688.0L629.5,692.0L626.6,698.0L628.9,706.0L632.4,713.0L639.4,726.0L645.7,739.0L643.4,737.0L641.1,736.0L637.6,736.0L634.7,736.0L628.9,732.0L623.1,726.0L612.1,728.0L605.7,728.0L600.4,728.0L610.9,730.0L621.9,731.0L646.3,753.0L654.5,766.0L659.1,784.0L656.2,792.0L651.0,797.0L645.7,803.0L641.7,809.0L655.0,819.0L657.9,819.0L660.8,817.0L663.7,814.0L669.0,806.0L671.3,803.0L679.4,802.0L687.0,803.0L693.9,805.0L700.3,804.0L712.5,808.0L718.9,811.0L735.2,825.0L738.7,832.0L739.8,842.0L740.4,853.0L737.5,863.0L734.6,872.0L732.3,884.0L731.1,888.0L729.4,891.0L720.7,901.0L715.4,904.0L713.1,903.0L710.2,903.0L710.2,905.0L712.5,910.0L713.1,916.0L707.9,920.0L702.7,921.0L694.5,919.0L682.3,927.0L691.0,931.0L692.8,935.0L690.5,943.0L685.2,946.0L679.4,948.0L673.0,948.0L668.4,950.0L663.2,953.0L669.6,951.0L673.6,953.0L676.5,959.0L678.8,961.0L690.5,964.0L697.4,964.0L711.9,962.0L718.3,963.0L721.2,964.0L721.2,969.0L720.1,982.0L718.3,984.0L699.7,995.0L695.7,1003.0L694.5,1007.0L683.5,1007.0L678.8,1011.0L669.6,1015.0L663.2,1018.0L656.2,1022.0L650.4,1024.0L627.2,1018.0L612.6,1019.0L592.9,1024.0L588.3,1023.0L580.7,1018.0L573.2,1016.0L564.4,1014.0L556.3,1010.0L561.5,1018.0L550.5,1025.0L545.9,1027.0L540.6,1026.0L530.2,1029.0L520.9,1028.0L522.1,1033.0L525.0,1037.0L522.6,1039.0L520.3,1040.0L502.3,1036.0L499.4,1037.0L497.7,1040.0L490.7,1038.0L484.3,1033.0L477.3,1029.0L470.4,1028.0L464.6,1028.0L441.3,1037.0L436.1,1045.0L433.8,1057.0L430.9,1068.0L425.1,1076.0L418.7,1077.0L412.3,1071.0L400.7,1065.0L396.6,1061.0L394.9,1061.0L393.7,1062.0L389.1,1064.0L384.4,1064.0L376.9,1066.0L364.1,1071.0L358.9,1074.0L347.8,1084.0L345.5,1087.0L341.5,1096.0L335.1,1098.0L329.8,1092.0L323.5,1089.0L316.5,1092.0L312.4,1095.0L310.7,1092.0L310.1,1087.0L315.3,1080.0L328.7,1075.0L340.3,1063.0L346.1,1055.0L347.8,1050.0L350.7,1048.0L354.8,1047.0L356.6,1042.0L372.8,1022.0L374.0,1018.0L374.6,1010.0L376.3,1002.0L389.1,997.0L395.5,981.0L397.2,980.0L415.8,977.0L429.1,977.0L442.5,980.0L449.5,981.0L456.4,979.0L462.2,975.0L471.5,959.0L476.8,953.0L482.6,946.0L488.4,939.0L497.7,926.0L491.3,930.0L483.7,938.0ZM394.9,768.0L397.2,770.0L403.6,769.0L401.8,774.0L394.9,778.0L390.2,783.0L385.0,787.0L382.1,782.0L379.2,782.0L374.6,774.0L373.4,761.0L379.8,758.0L388.5,758.0L394.9,768.0ZM490.7,177.0L484.3,177.0L487.8,171.0L491.3,170.0L498.8,170.0L497.7,173.0L490.7,177.0ZM578.4,49.0L576.6,50.0L571.4,40.0L575.5,28.0L580.1,28.0L581.3,31.0L580.7,34.0L577.8,35.0L577.8,35.0L578.4,41.0L578.4,47.0L578.4,49.0ZM562.7,46.0L563.9,53.0L566.8,52.0L571.4,58.0L573.7,58.0L577.8,56.0L576.6,62.0L573.2,79.0L572.0,82.0L571.4,88.0L570.3,89.0L569.1,99.0L566.8,103.0L564.4,111.0L563.3,112.0L559.8,109.0L563.3,96.0L564.4,89.0L563.9,85.0L562.1,81.0L556.9,81.0L552.8,83.0L551.7,81.0L551.7,78.0L550.5,77.0L545.3,77.0L543.5,76.0L542.4,74.0L541.8,72.0L547.0,70.0L551.7,71.0L559.2,67.0L554.6,53.0L548.8,52.0L547.6,50.0L548.8,48.0L551.7,47.0L556.9,40.0L559.8,39.0L563.3,39.0L562.7,46.0ZM593.5,19.0L593.5,20.0L590.6,28.0L590.6,32.0L585.9,31.0L585.3,30.0L584.2,25.0L584.8,20.0L585.3,19.0L587.1,18.0L588.3,19.0L591.2,17.0L592.3,17.0L593.5,19.0ZM454.7,221.0L451.8,222.0L448.3,222.0L443.1,216.0L441.3,212.0L441.9,209.0L443.7,208.0L448.9,210.0L451.2,214.0L451.8,217.0L452.4,219.0L455.3,220.0L454.7,221.0ZM468.6,226.0L468.0,226.0L465.7,224.0L462.2,218.0L468.0,216.0L470.4,217.0L469.8,220.0L468.6,226.0ZM461.1,197.0L460.5,199.0L465.1,199.0L471.0,202.0L475.0,202.0L478.5,204.0L476.8,209.0L474.4,211.0L472.7,211.0L465.1,206.0L454.7,208.0L452.9,207.0L451.8,206.0L451.2,204.0L451.2,201.0L450.6,200.0L447.1,203.0L445.4,203.0L444.2,201.0L444.2,198.0L444.2,194.0L446.6,187.0L450.0,186.0L455.3,186.0L461.7,190.0L463.4,192.0L463.4,194.0L461.1,197.0ZM480.2,181.0L475.0,184.0L473.3,182.0L472.7,175.0L466.9,173.0L463.4,171.0L461.7,168.0L462.2,167.0L465.7,165.0L472.7,171.0L475.6,176.0L480.2,177.0L480.8,178.0L480.2,181.0ZM254.9,441.0L251.4,442.0L251.4,441.0L257.3,434.0L260.7,433.0L261.9,433.0L259.6,437.0L254.9,441.0ZM342.0,555.0L335.1,555.0L332.2,554.0L329.3,552.0L325.8,538.0L326.9,533.0L328.7,531.0L329.8,529.0L333.9,528.0L337.4,531.0L339.1,533.0L342.0,543.0L342.6,551.0L342.0,555.0ZM303.1,466.0L279.9,471.0L272.3,471.0L271.2,468.0L272.9,466.0L279.3,464.0L282.2,451.0L272.3,445.0L271.8,443.0L272.3,440.0L273.5,439.0L279.9,436.0L282.2,435.0L284.5,435.0L288.6,439.0L293.3,446.0L299.6,448.0L304.3,451.0L303.1,466.0ZM282.8,507.0L285.1,520.0L286.9,528.0L286.9,530.0L285.1,534.0L275.8,539.0L272.3,539.0L272.3,538.0L274.7,533.0L272.9,527.0L273.5,523.0L272.9,522.0L271.2,523.0L264.2,530.0L261.9,530.0L261.3,529.0L263.1,523.0L263.6,519.0L264.2,517.0L266.5,515.0L268.9,513.0L270.0,513.0L272.3,514.0L277.6,509.0L282.8,507.0ZM292.1,519.0L290.9,520.0L288.0,519.0L286.9,518.0L286.3,515.0L286.3,511.0L288.0,507.0L295.6,503.0L292.1,501.0L292.1,500.0L293.8,495.0L302.0,489.0L304.3,488.0L306.0,488.0L302.0,499.0L292.1,519.0ZM278.7,264.0L271.2,281.0L268.9,282.0L266.0,286.0L258.4,291.0L264.8,291.0L267.1,292.0L267.1,296.0L266.0,298.0L256.7,306.0L250.9,309.0L243.9,317.0L241.0,317.0L237.5,323.0L234.6,325.0L233.4,325.0L231.7,324.0L227.6,319.0L234.6,313.0L235.8,311.0L240.4,308.0L240.4,307.0L232.3,303.0L228.8,300.0L229.4,298.0L232.9,295.0L231.1,295.0L230.0,293.0L227.6,292.0L227.1,290.0L227.1,286.0L227.1,282.0L230.0,280.0L230.5,278.0L231.7,277.0L235.2,278.0L238.7,282.0L243.3,280.0L248.0,281.0L248.5,280.0L244.5,272.0L245.1,270.0L247.4,268.0L259.0,262.0L272.9,251.0L276.4,250.0L277.6,251.0L279.3,257.0L278.7,264.0ZM274.1,404.0L272.3,405.0L270.0,405.0L268.3,403.0L265.4,398.0L271.8,395.0L274.1,397.0L275.3,399.0L275.3,402.0L274.1,404.0ZM282.2,349.0L281.6,354.0L280.5,359.0L282.2,365.0L282.2,369.0L285.1,370.0L286.3,372.0L297.3,374.0L307.8,373.0L309.5,375.0L309.5,377.0L307.8,380.0L302.5,385.0L295.6,394.0L293.3,395.0L290.9,396.0L289.8,395.0L288.0,380.0L281.1,382.0L274.7,382.0L271.8,380.0L269.4,376.0L264.8,367.0L250.9,364.0L247.4,359.0L246.2,356.0L246.8,354.0L249.1,350.0L253.2,352.0L255.5,351.0L256.7,349.0L256.7,348.0L254.3,345.0L254.3,344.0L268.3,340.0L269.4,333.0L272.3,333.0L275.8,335.0L280.5,341.0L282.2,349.0ZM220.1,332.0L227.1,337.0L221.8,347.0L213.7,347.0L202.1,340.0L202.1,338.0L203.2,336.0L205.0,335.0L206.7,334.0L209.6,336.0L213.7,334.0L216.6,334.0L220.1,332.0ZM217.8,388.0L215.4,389.0L212.0,388.0L210.2,387.0L208.5,381.0L207.9,377.0L208.5,370.0L208.5,362.0L214.9,362.0L216.6,363.0L217.8,387.0L217.8,388.0ZM207.9,403.0L203.2,405.0L200.9,404.0L200.9,403.0L202.1,399.0L206.1,398.0L208.5,400.0L209.1,402.0L207.9,403.0ZM277.6,691.0L272.9,691.0L269.4,692.0L267.1,694.0L264.8,694.0L258.4,694.0L252.6,694.0L251.4,692.0L252.6,684.0L251.4,682.0L245.6,680.0L243.9,679.0L240.4,673.0L239.8,671.0L239.2,667.0L235.8,663.0L231.7,659.0L229.4,659.0L224.7,665.0L220.7,670.0L221.8,672.0L223.0,676.0L221.2,679.0L214.3,684.0L213.7,687.0L211.4,688.0L208.5,686.0L200.9,687.0L196.9,686.0L192.8,681.0L182.9,678.0L180.6,672.0L178.9,670.0L167.2,659.0L165.5,655.0L167.2,652.0L171.9,649.0L186.4,643.0L188.7,641.0L188.7,638.0L184.7,636.0L180.6,633.0L179.4,632.0L179.4,630.0L181.8,628.0L185.8,628.0L189.3,629.0L192.2,627.0L196.9,625.0L200.3,623.0L203.2,617.0L206.1,612.0L206.1,609.0L209.1,600.0L210.2,597.0L219.5,591.0L221.8,594.0L226.5,595.0L230.5,592.0L235.2,582.0L238.7,581.0L242.7,582.0L249.7,581.0L263.1,576.0L268.9,576.0L277.0,578.0L282.8,578.0L288.0,586.0L290.9,597.0L297.9,608.0L306.6,618.0L307.2,624.0L303.7,628.0L297.3,632.0L297.3,636.0L301.4,634.0L305.4,633.0L314.7,634.0L317.6,638.0L320.0,645.0L321.1,650.0L320.5,656.0L318.2,654.0L315.3,649.0L313.0,646.0L309.5,645.0L310.7,652.0L310.1,662.0L311.8,663.0L315.9,663.0L313.0,673.0L307.2,675.0L300.2,676.0L298.5,680.0L297.3,684.0L293.8,691.0L289.2,695.0L283.4,694.0L277.6,691.0ZM577.2,1031.0L572.0,1034.0L570.3,1038.0L569.1,1040.0L566.2,1041.0L562.7,1041.0L551.1,1033.0L548.2,1033.0L550.5,1030.0L558.6,1027.0L562.7,1023.0L572.6,1026.0L577.2,1031.0Z","ie":"M61.0,709.0L61.0,712.0L56.3,708.0L54.6,704.0L42.4,702.0L47.6,698.0L49.9,699.0L58.1,700.0L60.4,701.0L61.0,709.0ZM219.5,591.0L210.2,597.0L209.1,600.0L206.1,609.0L206.1,612.0L203.2,617.0L200.3,623.0L196.9,625.0L192.2,627.0L189.3,629.0L185.8,628.0L181.8,628.0L179.4,630.0L179.4,632.0L180.6,633.0L184.7,636.0L188.7,638.0L188.7,641.0L186.4,643.0L171.9,649.0L167.2,652.0L165.5,655.0L167.2,659.0L178.9,670.0L180.6,672.0L182.9,678.0L192.8,681.0L196.9,686.0L200.9,687.0L208.5,686.0L211.4,688.0L213.7,687.0L214.3,684.0L221.2,679.0L223.0,676.0L221.8,672.0L220.7,670.0L224.7,665.0L229.4,659.0L231.7,659.0L235.8,663.0L239.2,667.0L239.8,671.0L240.4,673.0L243.9,679.0L245.6,680.0L251.4,682.0L252.6,684.0L251.4,692.0L252.6,694.0L258.4,694.0L264.8,694.0L267.1,694.0L269.4,692.0L272.9,691.0L277.6,691.0L279.9,695.0L281.1,698.0L277.0,700.0L272.3,699.0L270.0,701.0L270.0,706.0L271.8,712.0L274.7,716.0L277.0,725.0L279.3,736.0L282.2,742.0L282.8,750.0L282.2,754.0L282.8,761.0L281.6,763.0L282.2,770.0L286.3,783.0L287.4,791.0L288.6,807.0L286.3,813.0L282.8,819.0L280.5,826.0L278.7,834.0L277.6,846.0L270.0,860.0L267.1,863.0L263.6,866.0L271.8,875.0L264.8,880.0L257.8,881.0L249.7,879.0L245.1,879.0L240.4,882.0L238.7,884.0L237.5,883.0L234.6,875.0L232.3,883.0L227.6,886.0L219.5,886.0L206.7,888.0L201.5,890.0L199.8,894.0L198.0,898.0L195.7,901.0L193.4,902.0L183.5,905.0L181.8,907.0L177.1,913.0L170.7,917.0L165.5,919.0L161.4,915.0L159.7,912.0L157.4,911.0L150.4,911.0L152.7,912.0L153.9,915.0L154.5,921.0L153.9,926.0L150.4,929.0L146.3,929.0L139.9,935.0L131.2,936.0L127.2,942.0L98.7,950.0L97.6,950.0L93.5,948.0L89.4,947.0L85.4,948.0L73.2,953.0L67.4,952.0L74.9,940.0L84.8,934.0L85.9,932.0L82.5,931.0L63.9,935.0L57.5,939.0L51.1,940.0L54.0,934.0L62.1,927.0L66.8,923.0L69.7,922.0L72.6,918.0L81.3,913.0L52.8,923.0L45.9,922.0L44.1,919.0L38.3,920.0L36.0,913.0L44.7,903.0L49.4,898.0L55.7,896.0L61.0,892.0L63.3,888.0L60.4,886.0L43.6,887.0L35.4,887.0L36.0,883.0L37.2,879.0L45.9,873.0L50.5,872.0L54.6,872.0L58.7,874.0L61.6,876.0L71.4,875.0L67.4,871.0L66.8,862.0L63.3,860.0L67.4,856.0L72.0,853.0L79.6,845.0L81.9,844.0L97.0,842.0L112.7,838.0L128.9,832.0L120.8,829.0L116.7,824.0L110.3,833.0L106.3,837.0L93.5,838.0L89.4,837.0L83.6,835.0L81.9,836.0L80.1,838.0L71.4,842.0L62.7,843.0L73.2,835.0L85.9,822.0L88.8,818.0L93.5,810.0L91.8,807.0L89.4,805.0L98.7,790.0L102.2,788.0L108.0,787.0L112.7,785.0L114.4,785.0L116.1,784.0L120.2,779.0L114.4,776.0L108.0,775.0L88.8,776.0L86.5,776.0L83.6,775.0L82.5,773.0L81.3,768.0L80.1,767.0L75.5,767.0L71.4,768.0L67.9,768.0L65.0,766.0L70.3,761.0L63.9,759.0L58.1,760.0L52.8,759.0L52.8,755.0L55.2,752.0L51.7,749.0L51.1,745.0L54.6,743.0L58.1,744.0L65.0,741.0L74.3,740.0L66.2,737.0L63.3,734.0L63.3,730.0L63.9,727.0L73.2,722.0L82.5,720.0L81.9,716.0L82.5,712.0L72.6,711.0L63.3,714.0L64.5,706.0L66.2,700.0L66.8,695.0L66.2,691.0L62.1,692.0L61.0,686.0L59.2,681.0L52.8,684.0L52.8,678.0L54.6,674.0L58.1,672.0L62.1,673.0L67.9,673.0L74.3,670.0L83.6,669.0L97.6,670.0L107.4,679.0L110.3,678.0L114.4,672.0L116.1,671.0L130.7,674.0L139.9,677.0L142.9,676.0L141.1,670.0L138.2,665.0L141.7,660.0L146.9,656.0L149.8,654.0L157.4,651.0L160.9,649.0L163.2,642.0L166.7,636.0L147.5,639.0L130.1,632.0L133.0,627.0L136.5,624.0L142.9,622.0L143.4,619.0L146.9,617.0L152.1,611.0L150.4,604.0L151.6,598.0L155.0,594.0L156.8,589.0L158.5,585.0L166.1,584.0L174.2,580.0L176.5,581.0L185.8,580.0L188.7,581.0L188.1,575.0L193.4,574.0L195.7,576.0L196.9,580.0L199.2,583.0L199.8,588.0L198.0,592.0L195.7,595.0L198.0,598.0L194.0,603.0L198.6,601.0L204.4,595.0L204.4,591.0L203.2,586.0L201.5,581.0L202.1,575.0L205.6,572.0L214.9,570.0L210.8,564.0L214.3,563.0L217.8,565.0L223.0,570.0L228.8,573.0L234.6,576.0L228.8,582.0L222.4,586.0L219.5,591.0Z"};
 const K = 100, C = Math.cos(54.5 * Math.PI / 180);
 const proj = (lat, lon) => [(lon + 11) * C * K, (61 - lat) * K];
 
 // Layers, each with its own version (bump when its data or handling changes)
 const LAYERS = [
-  {id:"desert", name:"Named news deserts", color:"--l-desert", ring:true, v:"1.0", note:"PINF-named, disputed and Ofcom-flagged districts"},
+  {id:"desert", name:"News deserts (PINF)", color:"--l-desert", ring:"ring", v:"1.1", note:"Confirmed PINF deserts only; disputed and thin districts moved out in v1.1"},
+  {id:"flag",   name:"Disputed or thin districts", color:"--l-flag", ring:"dot", v:"1.0", off:true, note:"Disputed or corrected PINF 2023 classifications; Ofcom-flagged thin provision. Off by default"},
   {id:"mill",   name:"Mill Media",          color:"--l-mill",   v:"1.0", note:"City newsletter titles"},
   {id:"nub",    name:"Nub News",            color:"--l-nub",    v:"1.0", note:"2026 launches only"},
   {id:"indie",  name:"Independent hyperlocals", color:"--l-indie", v:"1.0", note:"ICNN members and others named in sources"},
   {id:"letter", name:"Independent newsletters", color:"--l-letter", v:"1.0", note:"Substack / Ghost / Beehiiv titles"},
-  {id:"import", name:"Imported",            color:"--l-import", v:"1.0", note:"Your CSV rows"}
+  {id:"import", name:"Imported",            color:"--l-import", v:"1.1", note:"Your CSV rows; v1.1 adds district name and code matching"}
 ];
 
 const S = {
@@ -363,11 +403,11 @@ let RECORDS = [
   {layer:"desert", name:"Lewisham", place:"Lewisham", lat:51.45, lon:-0.02, status:"PINF desert (2024)", tone:"warn", detail:"Named with Gateshead as one of the two most populous news deserts in PINF's April 2024 report.", src:S.pinf24},
   {layer:"desert", name:"Gateshead", place:"Gateshead", lat:54.95, lon:-1.60, status:"PINF desert (2024)", tone:"warn", detail:"Named with Lewisham as one of the two most populous news deserts in PINF's April 2024 report.", src:S.pinf24},
   {layer:"desert", name:"Nuneaton and Bedworth", place:"Nuneaton", lat:52.52, lon:-1.47, status:"PINF desert (2024)", tone:"warn", detail:"Became a news desert after Bedworth Nub News closed (PINF 2024).", src:S.pinf24},
-  {layer:"desert", name:"Newport", place:"Newport", lat:51.58, lon:-2.99, status:"Disputed (2023)", tone:"plan", detail:"Classed as a desert in PINF's 2023 pilot. Newsquest objected: the South Wales Argus is based there but also covers neighbouring councils.", src:S.htfp23},
-  {layer:"desert", name:"Telford and Wrekin", place:"Telford", lat:52.68, lon:-2.45, status:"Disputed (2023)", tone:"plan", detail:"Classed as a desert in the 2023 pilot despite being home to the Shropshire Star, which covers several districts.", src:S.htfp23},
-  {layer:"desert", name:"Hinckley and Bosworth", place:"Hinckley", lat:52.54, lon:-1.37, status:"Error corrected (2023)", tone:"plan", detail:"Listed as a desert in 2023; PINF accepted the error because the Hinckley Times serves it.", src:S.htfp23},
-  {layer:"desert", name:"Merthyr Tydfil", place:"Merthyr Tydfil", lat:51.75, lon:-3.38, status:"Thin provision (Ofcom 2024)", tone:"plan", detail:"Ofcom noted very little dedicated local news provision.", src:S.ofcom},
-  {layer:"desert", name:"Neath Port Talbot", place:"Neath", lat:51.66, lon:-3.80, status:"Thin provision (Ofcom 2024)", tone:"plan", detail:"Ofcom noted very little dedicated local news provision.", src:S.ofcom},
+  {layer:"flag", name:"Newport", place:"Newport", lat:51.58, lon:-2.99, status:"Disputed (2023)", tone:"plan", detail:"Classed as a desert in PINF's 2023 pilot. Newsquest objected: the South Wales Argus is based there but also covers neighbouring councils.", src:S.htfp23},
+  {layer:"flag", name:"Telford and Wrekin", place:"Telford", lat:52.68, lon:-2.45, status:"Disputed (2023)", tone:"plan", detail:"Classed as a desert in the 2023 pilot despite being home to the Shropshire Star, which covers several districts.", src:S.htfp23},
+  {layer:"flag", name:"Hinckley and Bosworth", place:"Hinckley", lat:52.54, lon:-1.37, status:"Error corrected (2023)", tone:"plan", detail:"Listed as a desert in 2023; PINF accepted the error because the Hinckley Times serves it.", src:S.htfp23},
+  {layer:"flag", name:"Merthyr Tydfil", place:"Merthyr Tydfil", lat:51.75, lon:-3.38, status:"Thin provision (Ofcom 2024)", tone:"plan", detail:"Ofcom noted very little dedicated local news provision.", src:S.ofcom},
+  {layer:"flag", name:"Neath Port Talbot", place:"Neath", lat:51.66, lon:-3.80, status:"Thin provision (Ofcom 2024)", tone:"plan", detail:"Ofcom noted very little dedicated local news provision.", src:S.ofcom},
   // Mill Media
   {layer:"mill", name:"The Mill", place:"Manchester", lat:53.48, lon:-2.24, status:"Active", tone:"ok", detail:"Mill Media's first and largest title (4,000+ paying subscribers, ~54k readers). Founded 2020.", src:S.mill},
   {layer:"mill", name:"The Tribune", place:"Sheffield", lat:53.38, lon:-1.47, status:"Active", tone:"ok", detail:"Mill Media city title.", src:S.mill},
@@ -419,14 +459,20 @@ const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const store = {get(k){try{return localStorage.getItem(k)}catch(e){return null}}, set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
 const layerOf = id => LAYERS.find(l => l.id === id);
-let visible = new Set(LAYERS.map(l => l.id));
+let visible = new Set(LAYERS.filter(l => !l.off).map(l => l.id));
+const isRing = id => id === "desert" || id === "flag";
+const coarse = matchMedia("(pointer: coarse)").matches;
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const narrow = () => matchMedia("(max-width: 860px)").matches;
+let rendered = [];
 let selected = null;
 
 // ---------- map
 const svg = $("#map"), NS = "http://www.w3.org/2000/svg";
 const FULL = {x:120, y:0, w:680, h:1130};
 let vb = {...FULL};
-function setVB(){ svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); drawPoints(); }
+const zoomed = () => vb.w < FULL.w - 1;
+function setVB(){ svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); $("#mapbox").classList.toggle("zoomed", zoomed()); drawPoints(); }
 
 function drawBase(){
   svg.innerHTML = "";
@@ -446,22 +492,38 @@ function drawBase(){
 
 function drawPoints(){
   const g = $("#pts"); if (!g) return;
-  const scale = vb.w / FULL.w, r = 7 * scale;
+  const scale = vb.w / FULL.w, r = (coarse ? 8.5 : 7) * scale;
   const recs = RECORDS.filter(d => visible.has(d.layer) && isFinite(d.lat));
-  // deserts first so dots sit on top
-  recs.sort((a,b) => (a.layer==="desert"?0:1) - (b.layer==="desert"?0:1));
-  g.innerHTML = recs.map(d => {
-    const [x,y] = proj(d.lat, d.lon), L = layerOf(d.layer), col = css(L.color);
-    const isSel = selected === d;
-    const rr = d.layer === "desert" ? r*1.9 : r;
-    const fill = d.layer === "desert" ? "none" : col;
-    const stroke = d.layer === "desert" ? col : "";
-    return `<g class="pt ${d.layer==="desert"?"desert":""} ${isSel?"sel":""}" data-i="${RECORDS.indexOf(d)}" tabindex="0" role="button" aria-label="${esc(d.name)}, ${esc(d.place)}">
-      <circle cx="${x}" cy="${y}" r="${isSel?rr*1.35:rr}" fill="${fill}" ${stroke?`style="stroke:${stroke}"`:""}><title>${esc(d.name)} · ${esc(d.place)}</title></circle></g>`;
+  recs.sort((a,b) => (isRing(a.layer)?0:1) - (isRing(b.layer)?0:1));
+  // spread dots that share a spot (e.g. several outlets at one district centre)
+  const seen = {};
+  rendered = recs.map(d => {
+    let [x,y] = proj(d.lat, d.lon);
+    if (!isRing(d.layer)){
+      const key = x.toFixed(0)+","+y.toFixed(0), n = seen[key] = (seen[key] ?? -1) + 1;
+      if (n){ const a = n * 2.4, rad = r * 1.6 * Math.sqrt(n); x += Math.cos(a)*rad; y += Math.sin(a)*rad; }
+    }
+    return {d, x, y};
+  });
+  g.innerHTML = rendered.map(({d,x,y}) => {
+    const L = layerOf(d.layer), col = css(L.color), isSel = selected === d, ring = isRing(d.layer);
+    const rr = ring ? r*1.9 : r;
+    return `<g class="pt ${ring?d.layer==="flag"?"flag":"desert":""} ${isSel?"sel":""}" data-i="${RECORDS.indexOf(d)}" tabindex="0" role="button" aria-label="${esc(d.name)}, ${esc(d.place)}">
+      <circle cx="${x}" cy="${y}" r="${isSel?rr*1.35:rr}" fill="${ring?"none":col}" ${ring?`style="stroke:${col}"`:""}><title>${esc(d.name)} · ${esc(d.place)}</title></circle></g>`;
   }).join("");
 }
-svg.addEventListener("click", e => { const p = e.target.closest(".pt"); if (p && !moved) select(RECORDS[+p.dataset.i]); });
+// tap anywhere near a dot selects the nearest one (targets are small on phones)
+svg.addEventListener("click", e => {
+  if (moved) return;
+  const p = e.target.closest(".pt"); if (p) return select(RECORDS[+p.dataset.i]);
+  const rect = svg.getBoundingClientRect(), k = rect.width / vb.w;
+  let best = null, bd = coarse ? 28 : 16;
+  rendered.forEach(o => { const dx = (o.x-vb.x)*k + rect.left - e.clientX, dy = (o.y-vb.y)*k + rect.top - e.clientY, dist = Math.hypot(dx,dy); if (dist < bd){ bd = dist; best = o.d; } });
+  if (best) select(best);
+});
 svg.addEventListener("keydown", e => { const p = e.target.closest(".pt"); if (p && (e.key==="Enter"||e.key===" ")){ e.preventDefault(); select(RECORDS[+p.dataset.i]); }});
+let hintT;
+function hint(t){ const h = $("#maphint"); h.textContent = t; h.classList.add("on"); clearTimeout(hintT); hintT = setTimeout(() => h.classList.remove("on"), 1600); }
 
 // zoom + pan
 function zoom(f, cx, cy){
@@ -472,9 +534,16 @@ function zoom(f, cx, cy){
 $("#zin").onclick = () => zoom(.6); $("#zout").onclick = () => zoom(1/.6);
 $("#zreset").onclick = () => { vb = {...FULL}; setVB(); };
 function toSvg(e){ const r = svg.getBoundingClientRect(); return [vb.x + (e.clientX-r.left)/r.width*vb.w, vb.y + (e.clientY-r.top)/r.height*vb.h]; }
-svg.addEventListener("wheel", e => { e.preventDefault(); const [x,y] = toSvg(e); zoom(e.deltaY < 0 ? .8 : 1.25, x, y); }, {passive:false});
+svg.addEventListener("wheel", e => {
+  if (!(e.ctrlKey || e.metaKey)){ hint(navigator.platform.includes("Mac") ? "Hold ⌘ and scroll to zoom" : "Hold Ctrl and scroll to zoom"); return; }
+  e.preventDefault(); const [x,y] = toSvg(e); zoom(e.deltaY < 0 ? .8 : 1.25, x, y);
+}, {passive:false});
 let drag = null, moved = false;
-svg.addEventListener("pointerdown", e => { drag = {x:e.clientX, y:e.clientY, vb:{...vb}}; moved = false; });
+svg.addEventListener("pointerdown", e => {
+  moved = false;
+  if (!zoomed()) return; // at full view there is nothing to pan, so let the page scroll
+  drag = {x:e.clientX, y:e.clientY, vb:{...vb}};
+});
 window.addEventListener("pointermove", e => {
   if (!drag) return; const r = svg.getBoundingClientRect();
   const dx = (e.clientX-drag.x)/r.width*vb.w, dy = (e.clientY-drag.y)/r.height*vb.h;
@@ -489,7 +558,7 @@ function drawLegend(){
     const n = RECORDS.filter(r => r.layer === l.id).length;
     if (l.id === "import" && !n) return "";
     return `<button class="lg" aria-pressed="${visible.has(l.id)}" data-l="${l.id}" style="color:var(${l.color})">
-      <i class="${l.ring?"ring":""}" style="background:var(${l.color})"></i><span style="color:var(--ink)">${esc(l.name)}</span><small>${n} · v${l.v}</small></button>`;
+      <i class="${l.ring||""}" style="background:var(${l.color})"></i><span style="color:var(--ink)">${esc(l.name)}</span><small>${n} · v${l.v}</small></button>`;
   }).join("");
   $("#legend").querySelectorAll(".lg").forEach(b => b.onclick = () => {
     const id = b.dataset.l; visible.has(id) ? visible.delete(id) : visible.add(id);
@@ -504,7 +573,7 @@ function drawRows(){
   $("#rows").innerHTML = recs.length ? recs.map(d => {
     const L = layerOf(d.layer);
     return `<button class="row ${selected===d?"sel":""}" data-i="${RECORDS.indexOf(d)}">
-      <i class="${L.ring?"ring":""}" style="background:var(${L.color});border-color:var(${L.color})"></i>
+      <i class="${L.ring||""}" style="background:var(${L.color});border-color:var(${L.color})"></i>
       <div><b>${esc(d.name)}</b><span>${esc(d.place)} · ${esc(L.name)}</span></div>
       <span class="pill ${d.tone||""}">${esc(d.status||"")}</span></button>`;
   }).join("") : `<div class="empty">No records match. Clear the search or turn layers back on.</div>`;
@@ -515,7 +584,7 @@ function drawDetail(){
   if (!d){
     $("#detail").innerHTML = `<div class="eyebrow">How to read the map</div>
       <h2 style="margin-top:6px">Select a place</h2>
-      <p style="color:var(--muted);margin:8px 0 0;font-size:14px">Filled dots are outlets and newsletters. Dashed rings are districts named as news deserts, disputed or thin in the sources. Scroll or pinch to zoom; drag to pan.</p>`;
+      <p style="color:var(--muted);margin:8px 0 0;font-size:14px">Filled dots are outlets and newsletters. Red dashed rings are districts PINF names as news deserts. Grey dotted rings, off by default, are disputed or thin districts. Zoom with the + and − buttons${coarse?"":" or Ctrl/⌘ + scroll"}; once zoomed in, drag to pan.</p>`;
     return;
   }
   const L = layerOf(d.layer);
@@ -529,9 +598,14 @@ function drawDetail(){
     <p style="margin:12px 0 0;font-size:14.5px">${esc(d.detail||"")}</p>
     ${d.src?`<p style="margin:10px 0 0;font-size:13.5px"><a href="${esc(d.src)}" target="_blank" rel="noopener">Source</a></p>`:""}`;
 }
-function select(d, pan){
+function select(d, fromList){
   selected = d; drawDetail(); drawPoints(); drawRows();
-  if (pan && d){ const [x,y] = proj(d.lat,d.lon); if (vb.w > 300){ vb.w = 300; vb.h = 300*FULL.h/FULL.w; } vb.x = x - vb.w/2; vb.y = y - vb.h/2; setVB(); }
+  if (fromList && d){ const [x,y] = proj(d.lat,d.lon); if (vb.w > 300){ vb.w = 300; vb.h = 300*FULL.h/FULL.w; } vb.x = x - vb.w/2; vb.y = y - vb.h/2; setVB(); }
+  if (d && narrow()){
+    const behavior = reduceMotion ? "auto" : "smooth";
+    if (fromList) $(".mapcard").scrollIntoView({block:"start", behavior});
+    else $("#detail").scrollIntoView({block:"nearest", behavior});
+  }
 }
 $("#q").addEventListener("input", drawRows);
 
@@ -540,7 +614,7 @@ function drawSources(){
   const sc = $("#fscope").value, k = $("#fkind").value, q = $("#fsq").value.trim().toLowerCase();
   const rows = SOURCES.filter(s => (sc==="all"||s.scope===sc) && (k==="all"||s.kind===k) && (!q || Object.values(s).join(" ").toLowerCase().includes(q)));
   $("#srctable").innerHTML = `<thead><tr><th>Source</th><th>Country</th><th>Kind</th><th>Unit</th><th>Covers</th><th>Updated</th><th>Access</th><th>Gaps</th></tr></thead><tbody>` +
-    (rows.length ? rows.map(s => `<tr><td><a href="${esc(s.url)}" target="_blank" rel="noopener"><b>${esc(s.name)}</b></a></td><td><span class="pill">${s.scope}</span></td><td>${esc(s.kind)}</td><td>${esc(s.unit)}</td><td>${esc(s.covers)}</td><td class="num">${esc(s.updated)}</td><td>${esc(s.access)}</td><td>${esc(s.gaps)}</td></tr>`).join("")
+    (rows.length ? rows.map(s => `<tr><td><a href="${esc(s.url)}" target="_blank" rel="noopener"><b>${esc(s.name)}</b></a></td><td data-label="Country"><span class="pill">${s.scope}</span></td><td data-label="Kind">${esc(s.kind)}</td><td data-label="Unit">${esc(s.unit)}</td><td data-label="Covers">${esc(s.covers)}</td><td class="num" data-label="Updated">${esc(s.updated)}</td><td data-label="Access">${esc(s.access)}</td><td data-label="Gaps">${esc(s.gaps)}</td></tr>`).join("")
     : `<tr><td colspan="8" class="empty">No sources match these filters.</td></tr>`) + `</tbody>`;
 }
 ["#fscope","#fkind"].forEach(s => $(s).addEventListener("change", drawSources));
@@ -560,25 +634,52 @@ function parseCSV(t){
   if (f || row.length){ row.push(f); rows.push(row); }
   return rows.filter(r => r.some(x => x.trim()));
 }
+// District gazetteer: 2013 GB districts + 2019–23 mergers + NI 2015 districts (centroids)
+const normName = t => String(t||"").toLowerCase().replace(/&/g," and ").replace(/\bst\.\s*/g,"st ").replace(/[^a-z0-9 ]+/g," ").replace(/\s+/g," ").trim();
+const variants = t => { const n = normName(t); const out = new Set([n]);
+  const strip = n.replace(/\b(metropolitan borough|borough|district|city|county|london borough|royal borough) council$/,"").replace(/ council$/,"").replace(/^(city of|county of|city and county of|london borough of|royal borough of|borough of) /,"").replace(/ (city of|county of)$/,"").trim();
+  out.add(strip); return [...out].filter(Boolean); };
+const DISTRICTS = {};
+Object.entries(GAZ.n).forEach(([nm, ll]) => variants(nm).forEach(v => DISTRICTS[v] ??= {nm, ll}));
+const CODES = GAZ.c;
+function findDistrict(t){
+  if (!t) return null;
+  const code = String(t).trim().toUpperCase();
+  if (CODES[code]) return {nm:CODES[code], ll:GAZ.n[CODES[code]]};
+  for (const part of [t, ...String(t).split(/[;|\/]/)]) for (const v of variants(part)) if (DISTRICTS[v]) return DISTRICTS[v];
+  return null;
+}
 function importCSV(text){
   const rows = parseCSV(text);
   if (rows.length < 2) return "No data rows found. The first line must be column names.";
-  const h = rows[0].map(x => x.trim().toLowerCase());
-  const col = names => h.findIndex(x => names.includes(x));
-  const iN = col(["name","title","outlet","outlet name","publication"]), iLa = col(["lat","latitude","y"]), iLo = col(["lon","lng","long","longitude","x"]);
-  const iP = col(["place","town","city","location","lad","district","local authority"]), iT = col(["type","category","kind","layer"]), iU = col(["url","website","link"]), iNo = col(["notes","note","description"]);
+  const h = rows[0].map(x => x.trim().toLowerCase().replace(/^﻿/,""));
+  const col = (names, re) => h.findIndex(x => names.includes(x) || (re && re.test(x)));
+  const iN = col(["name","title","outlet","outlet name","outlet_name","publication","publication name","title name"]);
+  const iLa = col(["lat","latitude","y"]), iLo = col(["lon","lng","long","longitude","x"]);
+  const iCode = col(["lad_code","lad code","code","district code","la code","local authority code"], /^lad\d*cd$/);
+  const iD = col(["local_authority","local authority","local authority district","lad","lad_name","lad name","district","district name","area","coverage area"], /^lad\d*nm$/);
+  const iP = col(["place","town","city","location"]);
+  const iT = col(["type","category","kind","layer","ownership"]), iU = col(["url","website","link"]), iNo = col(["notes","note","description"]);
   if (iN < 0) return "Couldn't find a name column. Add one called name, title or outlet.";
-  const gaz = {}; RECORDS.forEach(r => gaz[r.place.toLowerCase()] = [r.lat, r.lon]);
-  let added = 0, unplaced = 0;
+  const places = {}; RECORDS.forEach(r => { if (!r.imported) places[normName(r.place)] = [r.lat, r.lon]; });
+  let added = 0, byDistrict = 0; const missed = [];
   rows.slice(1).forEach(r => {
-    let lat = parseFloat(r[iLa]), lon = parseFloat(r[iLo]); const place = iP >= 0 ? r[iP].trim() : "";
-    if (!(isFinite(lat) && isFinite(lon)) && gaz[place.toLowerCase()]) [lat, lon] = gaz[place.toLowerCase()];
-    if (!(isFinite(lat) && isFinite(lon)) || lat < 49 || lat > 61.5 || lon < -11 || lon > 2.5){ unplaced++; return; }
-    RECORDS.push({layer:"import", name:r[iN].trim(), place: place || "—", lat, lon, status: iT>=0 ? r[iT].trim() : "Imported", tone:"", detail: iNo>=0 ? r[iNo] : "", src: iU>=0 ? r[iU].trim() : "", imported:true});
+    const cell = i => i >= 0 ? (r[i] ?? "").trim() : "";
+    let lat = parseFloat(cell(iLa)), lon = parseFloat(cell(iLo)), how = "", place = cell(iP) || cell(iD);
+    const ok = () => isFinite(lat) && isFinite(lon) && lat > 49 && lat < 61.5 && lon > -11 && lon < 2.5;
+    if (!ok()){
+      const m = findDistrict(cell(iCode)) || findDistrict(cell(iD)) || findDistrict(cell(iP));
+      if (m){ [lat, lon] = m.ll; how = `Placed at the centre of ${m.nm}.`; place = place || m.nm; byDistrict++; }
+      else if (places[normName(cell(iP))]) [lat, lon] = places[normName(cell(iP))];
+    }
+    if (!ok()){ missed.push(cell(iN) + (place ? ` (${place})` : "")); return; }
+    RECORDS.push({layer:"import", name:cell(iN), place: place || "—", lat, lon, status: cell(iT) || "Imported", tone:"", detail: [cell(iNo), how].filter(Boolean).join(" "), src: cell(iU), imported:true});
     added++;
   });
   visible.add("import"); refreshAll();
-  return `Added ${added} row${added===1?"":"s"} to the map.` + (unplaced ? ` ${unplaced} skipped: no coordinates inside the UK and no matching place name.` : "");
+  let msg = `Added ${added} row${added===1?"":"s"} to the map` + (byDistrict ? `, ${byDistrict} placed by district.` : ".");
+  if (missed.length) msg += ` ${missed.length} couldn't be placed: ${missed.slice(0,8).join("; ")}${missed.length>8?` and ${missed.length-8} more`:""}. Add coordinates, a district code or a district name to these rows.`;
+  return msg;
 }
 $("#loadpaste").onclick = () => { $("#impmsg").textContent = importCSV($("#paste").value); };
 $("#file").onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { $("#impmsg").textContent = importCSV(r.result); }; r.readAsText(f); };
@@ -597,9 +698,10 @@ $("#copyexp").onclick = () => {
 function drawVersions(){
   $("#appver").textContent = `App v${APP_VERSION}`;
   $("#vertable").innerHTML = `<thead><tr><th>Component</th><th>Version</th><th>Records</th><th>Notes</th></tr></thead><tbody>
-    <tr><td><b>App</b></td><td class="mono">${APP_VERSION}</td><td class="num">${RECORDS.length}</td><td>First release, 25 Sep 2026</td></tr>` +
+    <tr><td><b>App</b></td><td class="mono">${APP_VERSION}</td><td class="num">${RECORDS.length}</td><td>Usability fixes, 25 Sep 2026</td></tr>` +
     LAYERS.map(l => `<tr><td><span style="color:var(${l.color})">●</span> ${esc(l.name)}</td><td class="mono">${l.v}</td><td class="num">${RECORDS.filter(r=>r.layer===l.id).length}</td><td>${esc(l.note)}</td></tr>`).join("") +
     `<tr><td>Data sources catalogue</td><td class="mono">1.0</td><td class="num">${SOURCES.length}</td><td>UK and US datasets</td></tr>
+     <tr><td>District gazetteer</td><td class="mono">1.0</td><td class="num">${Object.keys(GAZ.n).length}</td><td>Centroids: 2013 GB districts plus 2019–23 mergers, and NI's 11 districts (2015)</td></tr>
      <tr><td>Basemap</td><td class="mono">1.0</td><td class="num">—</td><td>Natural Earth 1:50m via world-atlas; simple equirectangular projection at 54.5°N</td></tr></tbody>`;
 }
 
