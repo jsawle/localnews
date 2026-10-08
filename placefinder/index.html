@@ -1,0 +1,978 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Place Finder</title>
+<link rel="icon" href="data:,">
+<meta name="description" content="Find the places mentioned in a document and see them on a map, in a table and as a word cloud.">
+<style>
+:root{
+  --bg:#f6f5f1; --panel:#ffffff; --ink:#1d2329; --muted:#56606a; --line:#d9d6cf; --accent:#0b5c96; --accent-ink:#ffffff;
+  --focus:#c7520a; --sel:#ffe9a8; --sea:#dfe9f1; --land:#f3f0e8; --border:#a8a296;
+  --c-country:#0b5c96; --c-state:#00785a; --c-city:#b34700; --c-physical:#9c3d84; --c-big:#7a5200;
+  --radius:10px; --shadow:0 1px 2px rgba(0,0,0,.06),0 2px 8px rgba(0,0,0,.05);
+  color-scheme: light;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding-bottom:56px}
+a{color:var(--accent)}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.skip{position:absolute;left:-9999px;top:8px;background:var(--panel);padding:8px 12px;border-radius:6px;z-index:50}
+.skip:focus{left:8px}
+.sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+header.top{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:14px 20px;background:var(--panel);border-bottom:1px solid var(--line)}
+header.top h1{margin:0;font-size:22px;letter-spacing:-.01em}
+header.top p{margin:0;color:var(--muted)}
+header.top .spacer{flex:1}
+.chip{display:inline-block;font-size:12px;font-weight:600;color:var(--muted);background:#eceae4;border-radius:999px;padding:1px 8px;vertical-align:middle;letter-spacing:.01em}
+button,.btn{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:7px 12px;cursor:pointer;min-height:36px}
+button:hover,.btn:hover{border-color:var(--muted)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.primary:hover{background:#094d7e}
+button:disabled{opacity:.55;cursor:not-allowed}
+button.icon{min-width:36px;padding:6px 8px;font-weight:700}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:16px 20px;max-width:1600px;margin:0 auto}
+@media (max-width:960px){.layout{grid-template-columns:1fr;padding:12px 16px}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;min-width:0}
+.card h2{font-size:16px;margin:0 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h2 .tools{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+aside .card + .card{margin-top:16px}
+.drop{border:2px dashed var(--border);border-radius:10px;padding:18px 12px;text-align:center;background:#faf9f6;transition:background .15s}
+.drop.over{background:#e8f1f8;border-color:var(--accent)}
+.drop p{margin:6px 0;color:var(--muted);font-size:13px}
+label{font-weight:600;font-size:14px}
+textarea{width:100%;min-height:150px;font:inherit;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;resize:vertical;background:#fff;color:var(--ink)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.samples{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.samples button{font-size:13px;min-height:32px;padding:4px 10px}
+fieldset{border:0;margin:0;padding:0}
+legend{font-weight:600;font-size:14px;margin-bottom:4px;padding:0}
+.typefilter label{display:flex;align-items:center;gap:8px;font-weight:400;padding:3px 0;cursor:pointer}
+.typefilter input{width:18px;height:18px;margin:0}
+.sw{display:inline-block;width:12px;height:12px;border-radius:50%;border:1.5px solid rgba(0,0,0,.35);flex:none}
+.status{font-size:13px;color:var(--muted);margin-top:10px;min-height:1.5em}
+.status.err{color:#a21616;font-weight:600}
+.results{display:grid;gap:16px;min-width:0}
+.stats{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:baseline}
+.stats .n{font-size:24px;font-weight:700;letter-spacing:-.01em}
+.stats .l{color:var(--muted);font-size:13px}
+.stats .doc{color:var(--muted);font-size:13px;margin-left:auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#mapWrap{position:relative;height:min(62vh,560px);min-height:320px;border-radius:8px;overflow:hidden;background:var(--sea);touch-action:none}
+#mapWrap svg{display:block;width:100%;height:100%;cursor:grab}
+#mapWrap svg:active{cursor:grabbing}
+.mapctl{position:absolute;top:10px;left:10px;display:flex;flex-direction:column;gap:6px;z-index:2}
+.mapctl button{background:rgba(255,255,255,.95);box-shadow:var(--shadow)}
+.empty{position:absolute;inset:auto 0 0 0;padding:14px;text-align:center;color:var(--muted);font-size:14px;pointer-events:none}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font-size:13px;color:var(--muted);align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.tip{position:absolute;pointer-events:none;background:#1d2329;color:#fff;font-size:13px;line-height:1.35;padding:6px 9px;border-radius:6px;max-width:260px;z-index:5;opacity:0;transition:opacity .1s}
+.tip b{display:block}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:1200px){.two{grid-template-columns:1fr}}
+#cloudWrap{height:360px;position:relative}
+#cloudWrap svg{width:100%;height:100%;display:block}
+#cloudWrap text{cursor:pointer}
+#cloudWrap text:focus{outline:none}
+#cloudWrap text:focus-visible,#cloudWrap text.sel{text-decoration:underline;text-decoration-thickness:3px}
+.note{font-size:12.5px;color:var(--muted);margin:6px 0 0}
+.tablewrap{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+caption{text-align:left;padding:6px 10px;font-size:13px;color:var(--muted)}
+th,td{padding:6px 10px;border-bottom:1px solid #ebe8e1;text-align:left;vertical-align:middle}
+thead th{position:sticky;top:0;background:#f1efe9;z-index:1;font-size:13px}
+th button{all:unset;cursor:pointer;font-weight:700;display:inline-flex;gap:4px;align-items:center}
+th button:focus-visible{outline:3px solid var(--focus)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:#faf8f3}
+tbody tr.sel{background:var(--sel)}
+tbody tr.off td:not(:first-child){color:#8a8f94;text-decoration:line-through}
+td select{font:inherit;font-size:13px;max-width:220px;border:1px solid var(--line);border-radius:6px;padding:3px 4px;background:#fff}
+td .pname{font-weight:600}
+.typecell{display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+#textView{height:360px;overflow:auto;white-space:pre-wrap;font-size:14.5px;line-height:1.65;border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:#fffdf8}
+mark{background:transparent;border-bottom:3px solid currentColor;padding:0 1px;cursor:pointer;color:inherit}
+mark.g-country{border-color:var(--c-country)} mark.g-state{border-color:var(--c-state)} mark.g-city{border-color:var(--c-city)} mark.g-physical{border-color:var(--c-physical)} mark.g-big{border-color:var(--c-big)}
+mark.sel{background:var(--sel)}
+mark.cur{background:#ffd24d;outline:2px solid #1d2329}
+.mnav{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);font-weight:400}
+dialog{border:0;border-radius:12px;max-width:760px;width:calc(100% - 32px);padding:0;box-shadow:0 10px 40px rgba(0,0,0,.25);color:var(--ink)}
+dialog::backdrop{background:rgba(20,24,28,.45)}
+dialog .inner{padding:20px 24px;max-height:85vh;overflow:auto}
+dialog h2{margin-top:0}
+dialog h3{margin:18px 0 6px;font-size:15px}
+dialog table{font-size:13.5px}
+dialog .close{position:sticky;top:0;float:right}
+.credit{position:fixed;right:12px;bottom:12px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:13px;box-shadow:var(--shadow);z-index:20}
+footer{max-width:1600px;margin:0 auto;padding:0 20px 12px;font-size:12.5px;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<a class="skip" href="#results">Skip to results</a>
+<header class="top">
+  <div>
+    <h1>Place Finder</h1>
+    <p>Find the places mentioned in a document and see them on a map, in a table and as a word cloud.</p>
+  </div>
+  <div class="spacer"></div>
+  <span class="chip" id="appVersion" title="App version"></span>
+  <button type="button" id="aboutBtn" aria-haspopup="dialog">About &amp; versions</button>
+</header>
+
+<div class="layout">
+  <aside aria-label="Document input">
+    <section class="card" aria-labelledby="h-add">
+      <h2 id="h-add">1. Add a document <span class="chip" data-model="reader"></span></h2>
+      <div class="drop" id="drop">
+        <label for="file" class="btn" style="display:inline-block">Choose a file…</label>
+        <input type="file" id="file" class="sr" accept=".txt,.md,.markdown,.csv,.html,.htm,.docx,.pdf,text/plain,text/html,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+        <p>or drag and drop it here</p>
+        <p>Word (.docx), PDF, text (.txt, .md, .csv) or web page (.html)</p>
+      </div>
+      <div style="margin-top:14px">
+        <label for="paste">Or paste text</label>
+        <textarea id="paste" placeholder="Paste an article, a story, notes, a transcript…"></textarea>
+        <div class="row">
+          <button type="button" class="primary" id="runBtn" disabled>Find places</button>
+          <button type="button" id="clearBtn">Clear</button>
+        </div>
+      </div>
+      <p style="margin:14px 0 0;font-weight:600;font-size:14px">Try an example</p>
+      <div class="samples" id="samples"></div>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-show">
+      <h2 id="h-show">2. Choose what to show</h2>
+      <fieldset class="typefilter" id="typeFilter">
+        <legend class="sr">Place types to show</legend>
+      </fieldset>
+      <p class="note">Untick a row in the table to hide a wrong match. Where several places share a name, use <b>Which place?</b> in the table to pick a different one.</p>
+    </section>
+  </aside>
+
+  <main class="results" id="results" tabindex="-1" aria-label="Results">
+    <section class="card" aria-label="Summary">
+      <div class="stats" id="stats">
+        <div><div class="n" id="sPlaces">0</div><div class="l">places</div></div>
+        <div><div class="n" id="sMentions">0</div><div class="l">mentions</div></div>
+        <div><div class="n" id="sCountries">0</div><div class="l">countries</div></div>
+        <div class="doc" id="sDoc">No document yet</div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="h-map">
+      <h2 id="h-map">Map <span class="chip" data-model="map"></span>
+        <span class="tools">
+          <button type="button" id="pngMap">Save map (PNG)</button>
+        </span>
+      </h2>
+      <div id="mapWrap">
+        <div class="mapctl" role="group" aria-label="Map zoom">
+          <button type="button" class="icon" id="zIn" aria-label="Zoom in">+</button>
+          <button type="button" class="icon" id="zOut" aria-label="Zoom out">−</button>
+          <button type="button" class="icon" id="zFit" aria-label="Zoom to the places found" title="Zoom to places">⤢</button>
+          <button type="button" class="icon" id="zWorld" aria-label="Show the whole world" title="Whole world">🌐</button>
+        </div>
+        <div class="empty" id="mapEmpty">Add a document to see its places here.</div>
+        <div class="tip" id="tip" aria-hidden="true"></div>
+      </div>
+      <div class="legend" id="legend" aria-label="Map key"></div>
+      <p class="note">Circle size shows how many times a place is mentioned. Countries mentioned are shaded. Drag to pan, scroll or use the buttons to zoom. Every place on the map is also listed in the table.</p>
+    </section>
+
+    <section class="card" aria-labelledby="h-table">
+        <h2 id="h-table">Places table
+          <span class="tools">
+            <button type="button" id="csvBtn">Download CSV</button>
+            <button type="button" id="geoBtn" title="GeoJSON can be added to ArcGIS Online and MapMaker maps">Download GeoJSON</button>
+          </span>
+        </h2>
+        <div class="tablewrap">
+          <table id="tbl">
+            <caption id="tblCap">Places found, most mentioned first</caption>
+            <thead><tr>
+              <th scope="col"><span class="sr">Show on map</span>Show</th>
+              <th scope="col" data-sort="name" aria-sort="none"><button type="button">Place</button></th>
+              <th scope="col" data-sort="type" aria-sort="none"><button type="button">Type</button></th>
+              <th scope="col" data-sort="within" aria-sort="none"><button type="button">Within</button></th>
+              <th scope="col" class="num" data-sort="count" aria-sort="descending"><button type="button">Mentions</button></th>
+              <th scope="col">Which place?</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    <div class="two">
+      <section class="card" aria-labelledby="h-cloud">
+        <h2 id="h-cloud">Word cloud <span class="chip" data-model="cloud"></span>
+          <span class="tools"><button type="button" id="pngCloud">Save cloud (PNG)</button></span>
+        </h2>
+        <div id="cloudWrap"></div>
+        <p class="note" id="cloudNote">Bigger names are mentioned more often. Select a name to find it on the map and in the text.</p>
+      </section>
+
+      <section class="card" aria-labelledby="h-text">
+      <h2 id="h-text">Document text <span class="chip" data-model="finder"></span>
+        <span class="tools mnav" id="mnav" hidden>
+          <span id="mnavLabel"></span>
+          <button type="button" class="icon" id="mPrev" aria-label="Previous mention">‹</button>
+          <button type="button" class="icon" id="mNext" aria-label="Next mention">›</button>
+        </span>
+      </h2>
+      <div id="textView" tabindex="0" aria-label="Document text with place names underlined"><span style="color:var(--muted)">The document text appears here, with each place name underlined in its type colour.</span></div>
+    </section>
+    </div>
+  </main>
+</div>
+
+<footer>
+  Places: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a> (public domain) and <a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a> (CC BY 4.0). Borders: Natural Earth. Your document is read in your browser and is not uploaded anywhere.
+</footer>
+<div class="credit">Created by Jason Sawle</div>
+
+<dialog id="about" aria-labelledby="aboutTitle">
+  <div class="inner">
+    <button type="button" class="close" id="aboutClose">Close</button>
+    <h2 id="aboutTitle">About Place Finder</h2>
+    <p>Place Finder reads a document, picks out the names of places, and shows how often each one is mentioned on a map, in a table and as a word cloud.</p>
+    <h3>How it works</h3>
+    <ul>
+      <li>The text is matched against a list of about 35,000 places (a <i>gazetteer</i>): countries, states and provinces, cities and towns with 15,000 or more people, continents, oceans and seas, rivers, lakes, mountains, islands and other physical regions.</li>
+      <li>It ignores words that are probably not places, such as people's names (“George Washington”), names that are part of something else (“New York Times”) and ordinary words at the start of a sentence (“Reading the map…”).</li>
+      <li>When several places share a name (Paris in France or Texas), it uses the rest of the document to choose: other places in the same country or state, and phrases like “Paris, Texas”.</li>
+      <li>Your document stays in your browser. Nothing is uploaded.</li>
+    </ul>
+    <h3>Things to check</h3>
+    <ul>
+      <li>Small villages, neighbourhoods, streets, buildings and parks are not in the gazetteer, so they will not be found.</li>
+      <li>Some matches will be wrong. Untick them in the table, or choose a different place under <b>Which place?</b></li>
+      <li>Scanned PDFs (pictures of pages) have no text to read. Copy and paste the text instead.</li>
+    </ul>
+    <h3>Versions</h3>
+    <table>
+      <thead><tr><th scope="col">Part</th><th scope="col">Version</th><th scope="col">What it does</th></tr></thead>
+      <tbody id="versionRows"></tbody>
+    </table>
+    <h3>Data and code</h3>
+    <ul>
+      <li>Countries, states and provinces, physical features, borders and the main cities: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a>, public domain.</li>
+      <li>Other cities and towns with 15,000+ people: <a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a>, CC BY 4.0, via the all-the-cities package.</li>
+      <li>Libraries: D3 (ISC), d3-cloud (BSD), TopoJSON (ISC), Mammoth (BSD-2) for Word files, PDF.js (Apache 2.0) for PDFs.</li>
+    </ul>
+  </div>
+</dialog>
+
+<script src="lib/d3.min.js"></script>
+<script src="lib/topojson-client.min.js"></script>
+<script src="lib/d3.layout.cloud.js"></script>
+<script>
+'use strict';
+/* ================= Versions ================= */
+const APP_VERSION = '1.0.0';
+const MODELS = {
+  reader: { name: 'Document reader', v: '1.0', what: 'Reads Word (.docx), PDF, text and web page files in the browser.' },
+  finder: { name: 'Place finder', v: '1.0', what: 'Matches names in the text against the gazetteer, filters out likely non-places, and chooses between places with the same name.' },
+  gazetteer: { name: 'Gazetteer data', v: '1.0', what: 'About 35,000 places from Natural Earth and GeoNames.' },
+  map: { name: 'Map', v: '1.0', what: 'Equal Earth map with circles sized by mentions and mentioned countries shaded.' },
+  cloud: { name: 'Word cloud', v: '1.0', what: 'Place names sized by number of mentions.' },
+};
+
+/* ================= Type groups ================= */
+const GROUPS = [
+  { id: 'country', label: 'Countries', types: [0], color: '#0b5c96' },
+  { id: 'state', label: 'States & provinces', types: [1], color: '#00785a' },
+  { id: 'city', label: 'Cities & towns', types: [2], color: '#b34700' },
+  { id: 'physical', label: 'Physical features', types: [5, 6, 7, 8, 9, 10], color: '#9c3d84' },
+  { id: 'big', label: 'Continents, oceans & world regions', types: [3, 4, 11], color: '#7a5200' },
+];
+const groupOfType = {}; GROUPS.forEach(g => g.types.forEach(t => groupOfType[t] = g));
+
+/* ================= Sample texts ================= */
+const SAMPLES = {
+  'Silk Road': `The Silk Road was never a single road. It was a web of routes that linked China with Central Asia, Persia, the Middle East and Europe for more than a thousand years.
+
+Many journeys began in Xi'an, the old capital, and followed the Hexi Corridor west to Dunhuang, at the edge of the Gobi Desert. From there, caravans chose a northern or a southern route around the Taklamakan Desert, meeting again at Kashgar. Crossing the Pamir Mountains, traders reached the great oasis cities of Samarkand and Bukhara in what is now Uzbekistan. Samarkand grew rich on the trade in silk, paper and glass.
+
+Further west, the routes passed through Merv in Turkmenistan and on to Baghdad on the Tigris. Goods were carried to the Mediterranean ports of Antioch and Tyre, and by sea to Constantinople, now Istanbul. Merchants from Venice and Genoa bought silk and spices there and shipped them across the Mediterranean to Italy.
+
+Not every route went over land. Ships sailed from Guangzhou across the South China Sea and the Indian Ocean to India, Sri Lanka and the Arabian Peninsula, and up the Red Sea to Egypt. Ideas travelled with the goods: Buddhism spread from India into China along these routes, and paper-making reached Baghdad and later Spain.`,
+  'Hurricane path': `Hurricane season in the Atlantic runs from June to November. The storms that cause the most damage in the United States often form over warm water in the Caribbean Sea or the Gulf of Mexico.
+
+A typical late-season storm might strengthen quickly in the Gulf of Mexico before making landfall in the Big Bend region of Florida, between Tallahassee and Tampa. Storm surge floods low-lying coastal towns, while the heaviest rain often falls much further inland.
+
+As the storm moves north it weakens over Georgia, but it still brings strong winds to Valdosta and Macon and power cuts across Atlanta. The remains of the storm can then stall over the Appalachian Mountains. Air forced up the slopes cools and drops huge amounts of rain on western North Carolina and eastern Tennessee. Rivers such as the French Broad rise quickly, and towns like Asheville can flood, even though they are hundreds of miles from the coast. Landslides close roads into South Carolina and Virginia.
+
+Comparing rainfall totals for Florida, Georgia, North Carolina and Tennessee shows why inland flooding is often the deadliest part of a hurricane.`,
+  'River fieldwork': `Our Year 9 fieldwork looked at how the River Thames changes from its source to the sea. The source is a small spring near Kemble in Gloucestershire. Downstream, the river passes through Oxford, where it is sometimes called the Isis, and then Reading and Windsor before it reaches London.
+
+In London the Thames is tidal and much wider. We compared it with the River Severn, the longest river in Great Britain, which rises in Wales and flows through Shrewsbury and Worcester to Gloucester before reaching the Bristol Channel near Bristol. Groups used data from Bath, Swindon and Cheltenham to compare rainfall on each side of the Cotswolds.
+
+Students then looked at flooding on the Thames in 2014 and compared it with floods on the Rhine in Germany and the Netherlands, and on the Danube in Austria and Hungary. Finally, each group chose a large river elsewhere in the world, such as the Nile in Egypt or the Mekong in Vietnam, and explained how people use it.`,
+};
+
+/* ================= Helpers ================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function setStatus(msg, err) { const s = $('#status'); s.textContent = msg; s.classList.toggle('err', !!err); }
+function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(s); }); }
+
+/* ================= State ================= */
+const S = {
+  gaz: null, world: null, index: null, abbr: null, maxN: 1, common: null, never: null,
+  text: '', docName: '', tokens: [], matches: [], groupsByKey: new Map(),
+  resolved: new Map(), override: new Map(), excluded: new Set(), showGroups: new Set(GROUPS.map(g => g.id)),
+  places: [], visible: [], selected: null, curMention: 0, sort: { key: 'count', dir: -1 },
+};
+
+/* ================= Normalisation (must match the gazetteer build) ================= */
+function norm(s) {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/[’`]/g, "'").replace(/\./g, '').replace(/[-–—]/g, ' ')
+    .replace(/\b(saint|ste?)\b/g, 'st').replace(/\b(mount|mt)\b/g, 'mt').replace(/\bfort\b|\bft\b/g, 'fort')
+    .replace(/^the /, '').replace(/\s+/g, ' ').trim();
+}
+function normTok(raw) { return norm(raw.replace(/['’]s$/i, '').replace(/['’]$/, '')); }
+
+/* ================= Load data ================= */
+async function loadData() {
+  setStatus('Loading place data…');
+  try {
+    const [g, w] = await Promise.all([fetch('data/places.json').then(r => { if (!r.ok) throw new Error('places.json ' + r.status); return r.json(); }), fetch('data/world.json').then(r => r.json())]);
+    S.gaz = g; S.world = w;
+    MODELS.gazetteer.v = g.version;
+    buildIndex();
+    initMap();
+    renderVersions();
+    $('#runBtn').disabled = false;
+    setStatus(`Ready. ${g.places.length.toLocaleString()} places loaded.`);
+  } catch (e) {
+    console.error(e);
+    setStatus('Could not load the place data. Check your connection and reload the page.', true);
+  }
+}
+function buildIndex() {
+  const idx = new Map(), abbr = new Map();
+  let maxN = 1;
+  const put = (m, k, i) => { let a = m.get(k); if (!a) m.set(k, a = []); if (!a.includes(i)) a.push(i); };
+  S.gaz.places.forEach((p, i) => {
+    for (const n of [p[0], ...p[8]]) {
+      if (n[0] === '§') { put(abbr, n.slice(1).replace(/\./g, ''), i); continue; }
+      const k = norm(n); if (!k) continue;
+      put(idx, k, i); maxN = Math.max(maxN, k.split(' ').length);
+    }
+  });
+  S.index = idx; S.abbr = abbr; S.maxN = Math.min(maxN, 7);
+  S.common = new Set(S.gaz.common);
+  S.never = new Set(S.gaz.never.map(w => w.toLowerCase()));
+}
+
+/* ================= Document reading ================= */
+async function readFile(file) {
+  const name = file.name; const ext = (name.split('.').pop() || '').toLowerCase();
+  if (ext === 'docx') {
+    if (!window.mammoth) await loadScript('lib/mammoth.browser.min.js');
+    const r = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+    return r.value;
+  }
+  if (ext === 'pdf') {
+    if (!window.pdfjsLib) { await loadScript('lib/pdf.min.js'); pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js'; }
+    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    let out = [];
+    for (let p = 1; p <= pdf.numPages; p++) {
+      setStatus(`Reading page ${p} of ${pdf.numPages}…`);
+      const tc = await (await pdf.getPage(p)).getTextContent();
+      let s = '';
+      for (const it of tc.items) { s += it.str; s += it.hasEOL ? '\n' : (it.str && !/\s$/.test(it.str) ? ' ' : ''); }
+      out.push(s.replace(/[ \t]+\n/g, '\n').replace(/([a-z])-\n([a-z])/g, '$1$2'));
+    }
+    return out.join('\n\n');
+  }
+  if (ext === 'html' || ext === 'htm') {
+    const raw = await file.text();
+    const doc = new DOMParser().parseFromString(raw.replace(/<\/(p|div|h\d|li|tr|section|article|blockquote)>|<br\s*\/?>/gi, m => m + '\n'), 'text/html');
+    doc.querySelectorAll('script,style,noscript,nav,header,footer').forEach(n => n.remove());
+    return (doc.body ? doc.body.textContent : '').replace(/\n{3,}/g, '\n\n');
+  }
+  if (['txt', 'md', 'markdown', 'csv', 'text', ''].includes(ext) || file.type.startsWith('text/')) return file.text();
+  throw new Error(`Place Finder can't read .${ext} files. Use Word (.docx), PDF, text or HTML, or paste the text.`);
+}
+async function handleFile(file) {
+  if (!file) return;
+  if (!S.gaz) { setStatus('Place data is still loading. Try again in a moment.', true); return; }
+  setStatus(`Reading ${file.name}…`);
+  try {
+    const text = await readFile(file);
+    if (!text || !text.trim()) { setStatus(`No text found in ${file.name}. If it is a scanned PDF, copy and paste the text instead.`, true); return; }
+    $('#paste').value = '';
+    run(text, file.name);
+  } catch (e) { console.error(e); setStatus(e.message || 'Could not read that file.', true); }
+}
+
+/* ================= Place finder ================= */
+const GEO_WORDS = new Set(['city', 'river', 'lake', 'sea', 'ocean', 'mountains', 'mountain', 'island', 'islands', 'bay', 'gulf', 'valley', 'desert', 'state', 'strait', 'channel', 'peninsula', 'plateau', 'basin', 'delta', 'range', 'falls', 'of', 'the', 'de', 'del', 'la', 'le', 'du', 'des', 'and', 'on', 'upon', 'en', 'sur', 'am', 'an', 'der', 'di', 'da', 'do', 'dos', 'das', 'al', 'el', 'y']);
+const GEO_PREFIX = new Set(['north', 'south', 'east', 'west', 'northern', 'southern', 'eastern', 'western', 'central', 'northeast', 'northwest', 'southeast', 'southwest', 'north east', 'upper', 'lower', 'greater', 'inner', 'outer', 'coastal', 'rural', 'urban', 'downtown', 'old', 'mid', 'lake', 'river', 'mt', 'mount', 'port', 'in', 'of', 'to', 'from', 'across', 'near', 'around', 'through', 'via', 'and', 'or', 'but', 'with', 'at', 'by', 'for', 'into', 'over', 'under', 'between', 'beyond', 'outside', 'inside', 'within', 'throughout', 'towards', 'toward', 'like', 'as', 'than', 'both', 'neither', 'nor', 'the', 'a', 'an', 'is', 'was', 'are', 'were', 'visit', 'visited', 'visiting', 'leave', 'left', 'reach', 'reached', 'arrive', 'arrived', 'modern', 'ancient', 'medieval', 'colonial', 'imperial', 'french', 'british', 'spanish', 'portuguese', 'dutch', 'german', 'russian', 'chinese', 'english']);
+const TITLES = new Set(['mr', 'mrs', 'ms', 'miss', 'dr', 'sir', 'dame', 'lady', 'lord', 'president', 'general', 'gen', 'king', 'queen', 'prince', 'princess', 'governor', 'senator', 'sen', 'rep', 'judge', 'justice', 'captain', 'capt', 'pope', 'professor', 'prof', 'uncle', 'aunt', 'bishop', 'father', 'brother', 'sister', 'reverend', 'rev', 'officer', 'sergeant', 'lieutenant', 'colonel', 'admiral', 'chief', 'coach', 'mayor', 'minister', 'secretary', 'emperor', 'empress', 'duke', 'duchess', 'earl', 'count', 'baron', 'saint']);
+const GEO_SUFFIX = new Set(['river', 'lake', 'mountains', 'valley', 'basin', 'city', 'county', 'state', 'province', 'region', 'island', 'islands', 'bay', 'coast', 'sea', 'ocean', 'delta', 'desert', 'plateau', 'peninsula', 'highlands', 'lowlands', 'metropolitan', 'area', 'district', 'territory', 'harbour', 'harbor', 'estuary', 'gulf', 'strait', 'channel', 'border', 'borders', 'airport', 'station', 'centre', 'center', 'i']);
+const SUFFIX_TYPES = { river: [6], lake: [7], mountains: [8], mountain: [8], range: [8], hills: [8], desert: [10, 11], island: [9], islands: [9], sea: [4, 5], ocean: [4], bay: [5], gulf: [5], strait: [5], valley: [10, 11], basin: [10, 11], delta: [10, 6], peninsula: [10] };
+const SENT_ABBR = new Set(['st', 'mt', 'dr', 'mr', 'mrs', 'ms', 'ft', 'prof', 'gen', 'rev', 'capt', 'sen', 'rep', 'jr', 'sr', 'vs', 'etc', 'eg', 'ie', 'no']);
+const TOKEN_RE = /[\p{L}\p{M}\p{N}]+(?:[.'’\-][\p{L}\p{M}\p{N}]+)*\.?/gu;
+
+function tokenize(text) {
+  const toks = []; let m, prevEnd = 0, line = 0;
+  TOKEN_RE.lastIndex = 0;
+  while ((m = TOKEN_RE.exec(text))) {
+    const raw = m[0], gap = text.slice(prevEnd, m.index);
+    const nl = (gap.match(/\n/g) || []).length; line += nl;
+    const letters = raw.replace(/[^\p{L}]/gu, '');
+    const prev = toks[toks.length - 1];
+    let sent = !prev || nl > 0 || /[!?:;"“”]/.test(gap) || /^[\s]*[•\-–—*·]\s/.test(gap);
+    if (!sent && prev && /\.$/.test(prev.raw) && /\s/.test(gap)) {
+      const pn = prev.raw.replace(/\./g, '').toLowerCase();
+      sent = !(SENT_ABBR.has(pn) || /^(\p{Lu}\.)+$/u.test(prev.raw));
+    }
+    toks.push({ s: m.index, e: m.index + raw.length, raw, n: normTok(raw), cap: /^\p{Lu}/u.test(raw), caps: letters.length >= 2 && letters === letters.toUpperCase() && /\p{Lu}/u.test(letters), gap, sent, line });
+    prevEnd = m.index + raw.length;
+  }
+  // heading-like lines: short and mostly capitalised
+  const lines = new Map();
+  for (const t of toks) { const L = lines.get(t.line) || { n: 0, c: 0, last: null }; if (t.raw.length > 3) { L.n++; if (t.cap) L.c++; } L.last = t; lines.set(t.line, L); }
+  for (const t of toks) { const L = lines.get(t.line); const after = text.slice(L.last.e, L.last.e + 2); t.heading = L.n > 0 && L.n <= 12 && L.c / L.n >= 0.75 && !/^[.!?]/.test(after) && !/\.$/.test(L.last.raw); }
+  return toks;
+}
+
+function lookup(toks, i) {
+  const t = toks[i];
+  if (!t.cap || t.n === 'the') return null;
+  if (t.caps && t.raw.replace(/[^\p{L}]/gu, '').length <= 4) {
+    const a = S.abbr.get(t.raw.replace(/\./g, ''));
+    if (a) return { i, n: 1, key: '§' + t.raw.replace(/\./g, ''), c: a, abbr: true };
+  }
+  for (let n = Math.min(S.maxN, toks.length - i); n >= 1; n--) {
+    let ok = true;
+    for (let j = i + 1; j < i + n; j++) if (!/^[ \t\-]*$/.test(toks[j].gap) || /\.$/.test(toks[j - 1].raw) && !SENT_ABBR.has(toks[j - 1].raw.slice(0, -1).toLowerCase()) && !/^(\p{Lu}\.)+$/u.test(toks[j - 1].raw)) { ok = false; break; }
+    if (!ok) continue;
+    const last = toks[i + n - 1];
+    if (n > 1 && !last.cap && !GEO_WORDS.has(last.n)) continue;
+    if (n > 1 && GEO_WORDS.has(last.n) && ['of', 'the', 'de', 'la', 'and', 'on', 'y', 'el', 'al'].includes(last.n)) continue;
+    const key = toks.slice(i, i + n).map(t => t.n).join(' ').replace(/^the /, '');
+    const c = S.index.get(key);
+    if (c) return { i, n, key, c, abbr: false };
+  }
+  return null;
+}
+
+function findMatches(toks) {
+  const P = S.gaz.places, out = [];
+  const matchedEnd = new Set();
+  for (let i = 0; i < toks.length;) {
+    const f = lookup(toks, i);
+    if (!f) { i++; continue; }
+    const t0 = toks[i], prev = toks[i - 1], next = toks[i + f.n];
+    let cands = f.c.slice();
+    let reject = false;
+    if (f.abbr) {
+      // two-letter state codes only after a comma that follows a place ("Austin, TX")
+      cands = cands.filter(ci => P[ci][1] !== 1 || (prev && /^,\s*$/.test(t0.gap) && matchedEnd.has(i - 1)));
+      if (!cands.length) reject = true;
+    } else {
+      if (f.n === 1 && (S.never.has(t0.n) || t0.n.length < 3)) reject = true;
+      // ordinary English words used as names (Reading, Bath) need to be mid-sentence
+      if (!reject && (t0.sent || t0.heading)) { const c2 = cands.filter(ci => !(P[ci][7] & 2)); if (!c2.length) reject = true; else cands = c2; }
+      // part of a person's name or title: "George Washington", "President Lincoln"
+      if (!reject && f.n === 1 && prev && prev.cap && /^[ \t]+$/.test(t0.gap) && !matchedEnd.has(i - 1)) {
+        const pn = prev.n;
+        if (TITLES.has(pn.replace(/\./g, ''))) reject = true;
+        else if (!S.common.has(pn) && !GEO_PREFIX.has(pn)) reject = true;
+      }
+      // part of a longer name: "New York Times", "Jordan Peterson"
+      const last = toks[i + f.n - 1];
+      if (!reject && next && next.cap && /^[ \t]+$/.test(next.gap) && !/\.$/.test(last.raw) && !next.heading && !GEO_SUFFIX.has(next.n)) reject = true;
+      // "Pamir Mountains", "Mississippi River": prefer the type the next word names
+      if (!reject && next && /^[ \t]+$/.test(next.gap) && SUFFIX_TYPES[next.n]) {
+        const want = SUFFIX_TYPES[next.n];
+        const c2 = cands.filter(ci => want.includes(P[ci][1]));
+        if (c2.length) cands = c2;
+        else if (cands.every(ci => P[ci][1] >= 5)) reject = true;
+      }
+    }
+    if (reject) { i++; continue; }
+    const lt = toks[i + f.n - 1];
+    const keepDot = /^(\p{Lu}\.)+$/u.test(lt.raw) || SENT_ABBR.has(lt.raw.slice(0, -1).toLowerCase());
+    const m = { i, n: f.n, s: toks[i].s, e: lt.e - (/\.$/.test(lt.raw) && !keepDot ? 1 : 0), key: f.key, c: cands, ctx: null };
+    // "Paris, Texas" / "Portland, Maine" / "Austin, TX"
+    if (next && /^,\s*$/.test(next.gap)) {
+      const q = lookup(toks, i + f.n);
+      if (q) { m.ctx = q.c.filter(ci => P[ci][1] <= 1); if (m.ctx.length && cands.length > 1) m.key += ' @' + q.key; }
+    }
+    out.push(m);
+    matchedEnd.add(i + f.n - 1);
+    i += f.n;
+  }
+  return out;
+}
+
+function a1Of(p) { if (p[1] !== 2) return ''; const w = p[5].split(', '); return w.length >= 2 ? w[0] : ''; }
+function resolveAll() {
+  const P = S.gaz.places;
+  const byKey = new Map();
+  for (const m of S.matches) { let g = byKey.get(m.key); if (!g) byKey.set(m.key, g = { key: m.key, ms: [], cands: m.c }); g.ms.push(m); if (m.c.length < g.cands.length) g.cands = m.c; }
+  S.groupsByKey = byKey;
+  // context from comma qualifiers
+  for (const g of byKey.values()) {
+    g.ctxCC = new Set(); g.ctxA1 = new Set();
+    for (const m of g.ms) if (m.ctx) for (const ci of m.ctx) { const p = P[ci]; if (p[1] === 0) g.ctxCC.add(p[4]); else { g.ctxA1.add(p[4] + '|' + p[0]); g.ctxCC.add(p[4]); } }
+  }
+  // first guess: best base score
+  const choice = new Map();
+  for (const g of byKey.values()) choice.set(g.key, g.cands.slice().sort((a, b) => P[b][6] - P[a][6])[0]);
+  for (let pass = 0; pass < 3; pass++) {
+    const ccCount = new Map(), a1Set = new Map();
+    for (const g of byKey.values()) {
+      const p = P[choice.get(g.key)];
+      if (p[4]) ccCount.set(p[4], (ccCount.get(p[4]) || 0) + g.ms.length);
+      if (p[1] === 1) a1Set.set(p[4] + '|' + p[0], g.key);
+      const a1 = a1Of(p); if (a1) a1Set.set(p[4] + '|' + a1 + '#', g.key);
+    }
+    for (const g of byKey.values()) {
+      if (g.cands.length === 1) continue;
+      const own = P[choice.get(g.key)];
+      let best = null, bestS = -1e9;
+      g.scored = g.cands.map(ci => {
+        const p = P[ci];
+        let s = p[6];
+        if (norm(p[0]) === g.key.split(' @')[0]) s += 30; // the place's own name, not an alternative name
+        const others = (ccCount.get(p[4]) || 0) - (own[4] === p[4] ? g.ms.length : 0);
+        if (p[4] && others > 0) s += 35 + Math.min(10, others);
+        const a1 = a1Of(p);
+        if (a1 && a1Set.has(p[4] + '|' + a1) && a1Set.get(p[4] + '|' + a1) !== g.key) s += 20;
+        if (g.ctxCC.has(p[4])) s += 120;
+        if (a1 && g.ctxA1.has(p[4] + '|' + a1)) s += 200;
+        if (s > bestS) { bestS = s; best = ci; }
+        return [ci, s];
+      }).sort((a, b) => b[1] - a[1]);
+      choice.set(g.key, best);
+    }
+  }
+  S.resolved = choice;
+}
+
+function summarise() {
+  const P = S.gaz.places;
+  const byPlace = new Map();
+  S.matches.forEach((m, mi) => {
+    const pi = S.override.has(m.key) ? S.override.get(m.key) : S.resolved.get(m.key);
+    m.pi = pi;
+    let r = byPlace.get(pi);
+    if (!r) { const p = P[pi]; byPlace.set(pi, r = { pi, name: p[0], type: p[1], group: groupOfType[p[1]], within: p[5], cc: p[4], lon: p[2], lat: p[3], count: 0, forms: new Set(), keys: new Set(), occ: [] }); }
+    r.count++; r.forms.add(S.text.slice(m.s, m.e)); r.keys.add(m.key); r.occ.push(mi);
+  });
+  S.places = [...byPlace.values()];
+}
+
+function run(text, name) {
+  if (!S.gaz) return;
+  const t0 = performance.now();
+  S.text = text.replace(/\r\n?/g, '\n'); S.docName = name || 'Pasted text';
+  S.override.clear(); S.excluded.clear(); S.selected = null;
+  S.tokens = tokenize(S.text);
+  S.matches = findMatches(S.tokens);
+  resolveAll();
+  summarise();
+  const words = S.tokens.length;
+  setStatus(S.places.length ? `Found ${S.places.length} places in ${words.toLocaleString()} words (${Math.round(performance.now() - t0)} ms).` : `No places found in ${words.toLocaleString()} words.`);
+  renderAll(true);
+  if (S.places.length && window.innerWidth < 960) $('#results').focus();
+}
+
+/* ================= Rendering ================= */
+function computeVisible() {
+  S.visible = S.places.filter(r => S.showGroups.has(r.group.id) && !S.excluded.has(r.pi)).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+function renderAll(fit) {
+  computeVisible();
+  renderStats(); renderTable(); renderMap(fit); renderCloud(); renderText();
+}
+function renderStats() {
+  const v = S.visible;
+  $('#sPlaces').textContent = v.length;
+  $('#sMentions').textContent = v.reduce((a, r) => a + r.count, 0);
+  $('#sCountries').textContent = new Set(v.map(r => r.cc).filter(Boolean)).size;
+  $('#sDoc').textContent = S.text ? `${S.docName} · ${S.tokens.length.toLocaleString()} words` : 'No document yet';
+  $('#sDoc').title = $('#sDoc').textContent;
+}
+
+/* ---------- Table ---------- */
+function renderTable() {
+  const tb = $('#tbl tbody'); const P = S.gaz.places;
+  const rows = S.places.filter(r => S.showGroups.has(r.group.id)).slice();
+  const { key, dir } = S.sort;
+  const val = r => key === 'name' ? r.name : key === 'type' ? S.gaz.types[r.type] : key === 'within' ? r.within : r.count;
+  rows.sort((a, b) => { const x = val(a), y = val(b); return (typeof x === 'number' ? (x - y) : String(x).localeCompare(String(y))) * dir || b.count - a.count; });
+  document.querySelectorAll('#tbl th[data-sort]').forEach(th => th.setAttribute('aria-sort', th.dataset.sort === key ? (dir > 0 ? 'ascending' : 'descending') : 'none'));
+  $('#tblCap').textContent = rows.length ? `${rows.length} places found. Select a row to find it on the map and in the text.` : 'No places yet.';
+  tb.innerHTML = '';
+  for (const r of rows) {
+    const tr = document.createElement('tr');
+    tr.dataset.pi = r.pi;
+    if (S.excluded.has(r.pi)) tr.classList.add('off');
+    if (S.selected === r.pi) tr.classList.add('sel');
+    // alternatives across all keys that resolved here
+    const altSet = new Map();
+    for (const k of r.keys) { const g = S.groupsByKey.get(k); for (const ci of g.cands) altSet.set(ci, true); }
+    const alts = [...altSet.keys()].sort((a, b) => P[b][6] - P[a][6]).slice(0, 12);
+    let sel = '—';
+    if (alts.length > 1) {
+      sel = `<select aria-label="Which ${esc(r.name)}?" data-pi="${r.pi}">` + alts.map(ci => `<option value="${ci}"${ci === r.pi ? ' selected' : ''}>${esc(P[ci][0])}${P[ci][5] ? ', ' + esc(P[ci][5]) : ''} (${esc(S.gaz.types[P[ci][1]].toLowerCase())})</option>`).join('') + '</select>';
+    }
+    const forms = [...r.forms].filter(f => f !== r.name);
+    tr.innerHTML = `<td><input type="checkbox" ${S.excluded.has(r.pi) ? '' : 'checked'} aria-label="Show ${esc(r.name)}" data-pi="${r.pi}"></td>
+      <td><span class="pname">${esc(r.name)}</span>${forms.length ? `<div class="note" style="margin:0">as “${esc(forms.slice(0, 3).join('”, “'))}”</div>` : ''}</td>
+      <td><span class="typecell"><span class="sw" style="background:${r.group.color}" aria-hidden="true"></span>${esc(S.gaz.types[r.type])}</span></td>
+      <td>${esc(r.within || '')}</td>
+      <td class="num">${r.count}</td>
+      <td>${sel}</td>`;
+    tb.appendChild(tr);
+  }
+}
+$('#tbl tbody').addEventListener('click', e => {
+  if (e.target.closest('input,select')) return;
+  const tr = e.target.closest('tr'); if (tr) select(+tr.dataset.pi, 'table');
+});
+$('#tbl tbody').addEventListener('change', e => {
+  const t = e.target;
+  if (t.matches('input[type=checkbox]')) {
+    const pi = +t.dataset.pi; t.checked ? S.excluded.delete(pi) : S.excluded.add(pi);
+    renderAll(false);
+    const cb = document.querySelector(`#tbl input[data-pi="${pi}"]`); if (cb) cb.focus();
+  } else if (t.matches('select')) {
+    const from = +t.dataset.pi, to = +t.value;
+    const r = S.places.find(x => x.pi === from);
+    for (const k of r.keys) S.override.set(k, to);
+    if (S.excluded.has(from)) { S.excluded.delete(from); S.excluded.add(to); }
+    summarise(); S.selected = to; renderAll(false); select(to, 'table');
+    const s = document.querySelector(`#tbl select[data-pi="${to}"]`); if (s) s.focus();
+    setStatus(`Changed to ${S.gaz.places[to][0]}, ${S.gaz.places[to][5]}.`);
+  }
+});
+$('#tbl tbody').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.matches('input[type=checkbox]')) { e.preventDefault(); e.target.click(); }
+});
+// make rows keyboard reachable via the place name
+document.querySelectorAll('#tbl th[data-sort] button').forEach(b => b.addEventListener('click', () => {
+  const k = b.parentElement.dataset.sort;
+  S.sort = { key: k, dir: S.sort.key === k ? -S.sort.dir : (k === 'count' ? -1 : 1) };
+  renderTable();
+}));
+
+/* ---------- Map ---------- */
+const M = {};
+function initMap() {
+  const wrap = $('#mapWrap');
+  const svg = d3.select(wrap).insert('svg', ':first-child').attr('role', 'group').attr('aria-label', 'Map of the places found. The same places are listed in the table.');
+  M.svg = svg;
+  M.bg = svg.append('rect').attr('fill', '#dfe9f1');
+  M.g = svg.append('g');
+  M.sphere = M.g.append('path').attr('fill', '#dfe9f1').attr('stroke', '#b9c8d4').attr('vector-effect', 'non-scaling-stroke');
+  M.grat = M.g.append('path').attr('fill', 'none').attr('stroke', '#cddbe6').attr('stroke-width', 0.6).attr('vector-effect', 'non-scaling-stroke');
+  M.countries = M.g.append('g');
+  M.a1 = M.g.append('path').attr('fill', 'none').attr('stroke', '#c9c2b4').attr('stroke-width', 0.6).attr('vector-effect', 'non-scaling-stroke');
+  M.pts = M.g.append('g');
+  M.labels = M.g.append('g').attr('pointer-events', 'none');
+  M.countryFeatures = topojson.feature(S.world, S.world.objects.countries).features;
+  M.a1Mesh = topojson.mesh(S.world, S.world.objects.a1);
+  M.k = 1;
+  M.zoom = d3.zoom().scaleExtent([1, 300]).on('zoom', e => { M.g.attr('transform', e.transform); M.k = e.transform.k; scaleSymbols(); }).on('end', () => placeLabels());
+  svg.call(M.zoom).on('dblclick.zoom', null);
+  const ro = new ResizeObserver(() => { sizeMap(); });
+  ro.observe(wrap);
+  sizeMap();
+  $('#zIn').onclick = () => svg.transition().duration(reduceMotion ? 0 : 250).call(M.zoom.scaleBy, 2);
+  $('#zOut').onclick = () => svg.transition().duration(reduceMotion ? 0 : 250).call(M.zoom.scaleBy, 0.5);
+  $('#zFit').onclick = () => fitPlaces(true);
+  $('#zWorld').onclick = () => svg.transition().duration(reduceMotion ? 0 : 400).call(M.zoom.transform, d3.zoomIdentity);
+}
+function sizeMap() {
+  const wrap = $('#mapWrap'); const W = wrap.clientWidth, H = wrap.clientHeight;
+  if (!W || !H || (W === M.W && H === M.H)) return;
+  M.W = W; M.H = H;
+  M.svg.attr('viewBox', `0 0 ${W} ${H}`);
+  M.bg.attr('width', W).attr('height', H);
+  M.proj = d3.geoEqualEarth().fitExtent([[8, 8], [W - 8, H - 8]], { type: 'Sphere' });
+  M.path = d3.geoPath(M.proj);
+  M.zoom.translateExtent([[-W, -H], [2 * W, 2 * H]]);
+  M.sphere.attr('d', M.path({ type: 'Sphere' }));
+  M.grat.attr('d', M.path(d3.geoGraticule10()));
+  M.countries.selectAll('path').data(M.countryFeatures).join('path').attr('d', M.path).attr('stroke', '#a8a296').attr('stroke-width', 0.7).attr('vector-effect', 'non-scaling-stroke');
+  M.a1.attr('d', M.path(M.a1Mesh));
+  if (S.text) renderMap(true); else colorCountries();
+}
+function colorCountries() {
+  const mentioned = new Set((S.visible || []).filter(r => r.type === 0).map(r => r.cc));
+  M.countries.selectAll('path').attr('fill', d => mentioned.has(d.properties.cc) ? '#c5d8e8' : '#f3f0e8');
+}
+const rScale = () => d3.scaleSqrt().domain([1, Math.max(2, d3.max(S.visible, r => r.count) || 2)]).range([5, 26]);
+function renderMap(fit) {
+  if (!M.svg) return;
+  colorCountries();
+  const rs = rScale();
+  M.rs = rs;
+  const data = S.visible.slice().sort((a, b) => b.count - a.count);
+  const sel = M.pts.selectAll('g.pt').data(data, d => d.pi);
+  sel.exit().remove();
+  const en = sel.enter().append('g').attr('class', 'pt').attr('tabindex', 0).attr('role', 'button');
+  en.append('circle');
+  const all = en.merge(sel);
+  all.attr('aria-label', d => `${d.name}, ${S.gaz.types[d.type].toLowerCase()}${d.within ? ', ' + d.within : ''}. ${d.count} mention${d.count === 1 ? '' : 's'}.`)
+    .each(function (d) { const p = M.proj([d.lon, d.lat]); d._x = p[0]; d._y = p[1]; })
+    .attr('transform', d => `translate(${d._x},${d._y})`)
+    .on('mouseenter', (e, d) => showTip(e, d)).on('mousemove', (e, d) => showTip(e, d)).on('mouseleave', hideTip)
+    .on('focus', (e, d) => showTip(e, d, true)).on('blur', hideTip)
+    .on('click', (e, d) => select(d.pi, 'map'))
+    .on('keydown', (e, d) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(d.pi, 'map'); } });
+  all.select('circle').attr('fill', d => d.group.color).attr('fill-opacity', 0.78).attr('stroke', '#fff');
+  all.order();
+  const lab = M.labels.selectAll('text').data(data, d => d.pi);
+  lab.exit().remove();
+  lab.enter().append('text').attr('font-family', 'system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif').attr('font-weight', 600)
+    .attr('fill', '#1d2329').attr('stroke', '#fff').attr('stroke-linejoin', 'round').attr('paint-order', 'stroke')
+    .merge(lab).text(d => d.name).each(function (d) { d._lab = this; });
+  scaleSymbols();
+  $('#mapEmpty').style.display = S.visible.length ? 'none' : '';
+  $('#mapEmpty').textContent = S.text ? 'No places to show. Check the place types under “Choose what to show”.' : 'Add a document to see its places here.';
+  if (fit) fitPlaces(!!S.text); else placeLabels();
+  highlightMap();
+}
+function scaleSymbols() {
+  const k = M.k || 1, rs = M.rs || (() => 6);
+  M.pts.selectAll('g.pt').each(function (d) {
+    const sel = S.selected === d.pi;
+    d3.select(this).select('circle').attr('r', rs(d.count) / k).attr('stroke-width', (sel ? 3.5 : 1.3) / k).attr('stroke', sel ? '#1d2329' : '#fff');
+  });
+  M.labels.selectAll('text').attr('font-size', 12.5 / k).attr('stroke-width', 3 / k)
+    .attr('x', d => d._x + (rs(d.count) + 3) / k).attr('y', d => d._y + 4 / k);
+}
+function placeLabels() {
+  if (!M.labels) return;
+  const k = M.k || 1, t = d3.zoomTransform(M.svg.node()), rs = M.rs || (() => 6);
+  const boxes = [];
+  const data = S.visible.slice().sort((a, b) => (b.pi === S.selected) - (a.pi === S.selected) || b.count - a.count);
+  const show = new Set();
+  for (const d of data) {
+    const [sx, sy] = t.apply([d._x, d._y]);
+    if (sx < -50 || sy < -20 || sx > M.W + 50 || sy > M.H + 20) continue;
+    const w = d.name.length * 7.2 + 4, x = sx + rs(d.count) + 3, y = sy - 9;
+    const b = [x, y, x + w, y + 16];
+    if (boxes.some(o => !(b[2] < o[0] || b[0] > o[2] || b[3] < o[1] || b[1] > o[3]))) continue;
+    boxes.push(b, [sx - rs(d.count), sy - rs(d.count), sx + rs(d.count), sy + rs(d.count)]);
+    show.add(d.pi);
+    if (show.size >= 60) break;
+  }
+  M.labels.selectAll('text').attr('display', d => show.has(d.pi) ? null : 'none');
+}
+function fitPlaces(animate) {
+  const v = S.visible;
+  let tr = d3.zoomIdentity;
+  if (v.length) {
+    const xs = v.map(d => M.proj([d.lon, d.lat]));
+    let [x0, x1] = d3.extent(xs, p => p[0]), [y0, y1] = d3.extent(xs, p => p[1]);
+    const minSpan = 40; // never zoom tighter than ~a region
+    if (x1 - x0 < minSpan) { const c = (x0 + x1) / 2; x0 = c - minSpan / 2; x1 = c + minSpan / 2; }
+    if (y1 - y0 < minSpan) { const c = (y0 + y1) / 2; y0 = c - minSpan / 2; y1 = c + minSpan / 2; }
+    const k = Math.max(1, Math.min(60, 0.78 * Math.min(M.W / (x1 - x0), M.H / (y1 - y0))));
+    tr = d3.zoomIdentity.translate(M.W / 2, M.H / 2).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
+  }
+  (animate && !reduceMotion ? M.svg.transition().duration(650) : M.svg).call(M.zoom.transform, tr);
+  if (!animate || reduceMotion) placeLabels();
+}
+function showTip(e, d, focus) {
+  const tip = $('#tip'), wrap = $('#mapWrap').getBoundingClientRect();
+  tip.innerHTML = `<b>${esc(d.name)}</b>${esc(S.gaz.types[d.type])}${d.within ? ' · ' + esc(d.within) : ''}<br>${d.count} mention${d.count === 1 ? '' : 's'}`;
+  let x, y;
+  if (focus || !e.clientX) { const r = e.target.getBoundingClientRect(); x = r.right - wrap.left; y = r.top - wrap.top; } else { x = e.clientX - wrap.left; y = e.clientY - wrap.top; }
+  tip.style.left = Math.min(x + 12, wrap.width - 270) + 'px'; tip.style.top = Math.max(4, y - 50) + 'px'; tip.style.opacity = 1;
+}
+function hideTip() { $('#tip').style.opacity = 0; }
+function highlightMap() { scaleSymbols(); placeLabels(); }
+
+/* ---------- Word cloud ---------- */
+let cloudTimer = null, cloudRun = 0;
+function renderCloud() {
+  const wrap = $('#cloudWrap'); wrap.innerHTML = '';
+  const W = wrap.clientWidth || 500, H = wrap.clientHeight || 360;
+  const v = S.visible.slice(0, 150);
+  if (!v.length) { $('#cloudNote').textContent = 'Bigger names are mentioned more often. Select a name to find it on the map and in the text.'; return; }
+  const max = d3.max(v, d => d.count), min = d3.min(v, d => d.count);
+  const lo = v.length < 25 ? 18 : v.length < 60 ? 15 : 13;
+  const hi = Math.max(lo + 12, Math.min(v.length < 25 ? 96 : 80, W / Math.max(5, d3.max(v, d => d.name.length) * 0.6)));
+  const fs = d3.scaleSqrt().domain([min, Math.max(max, min + 1)]).range([lo, hi]);
+  const words = v.map(d => ({ text: d.name, size: max === min ? Math.round((lo + hi) / 2) : Math.round(fs(d.count)), d }));
+  const myRun = ++cloudRun;
+  d3.layout.cloud().size([W, H]).words(words).padding(3).rotate(0).random(seededRandom(7))
+    .font('system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif').fontWeight(700).fontSize(w => w.size)
+    .spiral('archimedean')
+    .on('end', placed => {
+      if (myRun !== cloudRun) return;
+      const svg = d3.select(wrap).append('svg').attr('viewBox', `0 0 ${W} ${H}`).attr('role', 'group').attr('aria-label', 'Word cloud of place names, sized by number of mentions');
+      svg.append('rect').attr('width', W).attr('height', H).attr('fill', '#ffffff');
+      const g = svg.append('g').attr('transform', `translate(${W / 2},${H / 2})`);
+      g.selectAll('text').data(placed).join('text')
+        .attr('text-anchor', 'middle').attr('font-family', 'system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif').attr('font-weight', 700)
+        .attr('font-size', w => w.size).attr('fill', w => w.d.group.color)
+        .attr('transform', w => `translate(${w.x},${w.y})`).text(w => w.text)
+        .attr('tabindex', 0).attr('role', 'button').attr('aria-label', w => `${w.text}, ${w.d.count} mention${w.d.count === 1 ? '' : 's'}`)
+        .classed('sel', w => w.d.pi === S.selected)
+        .on('click', (e, w) => select(w.d.pi, 'cloud'))
+        .on('keydown', (e, w) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(w.d.pi, 'cloud'); } })
+        .append('title').text(w => `${w.text}: ${w.d.count} mention${w.d.count === 1 ? '' : 's'}`);
+      const missing = words.length - placed.length + (S.visible.length - v.length);
+      $('#cloudNote').textContent = missing > 0 ? `Bigger names are mentioned more often. ${missing} less-mentioned place${missing === 1 ? '' : 's'} did not fit; see the table for all places.` : 'Bigger names are mentioned more often. Select a name to find it on the map and in the text.';
+    }).start();
+}
+function seededRandom(seed) { let s = seed; return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; }
+let lastCloudW = 0;
+new ResizeObserver(() => { const w = $('#cloudWrap').clientWidth; if (Math.abs(w - lastCloudW) < 8) return; lastCloudW = w; clearTimeout(cloudTimer); cloudTimer = setTimeout(() => { if (S.visible.length) renderCloud(); }, 250); }).observe($('#cloudWrap'));
+
+/* ---------- Text ---------- */
+const MAX_TEXT = 400000;
+function renderText() {
+  const tv = $('#textView');
+  if (!S.text) return;
+  const show = new Set(S.visible.map(r => r.pi));
+  const T = S.text.slice(0, MAX_TEXT);
+  let html = '', pos = 0;
+  S.matches.forEach((m, mi) => {
+    if (m.e > T.length || !show.has(m.pi)) return;
+    const r = S.places.find(x => x.pi === m.pi);
+    html += esc(T.slice(pos, m.s)) + `<mark class="g-${r.group.id}${m.pi === S.selected ? ' sel' : ''}" data-pi="${m.pi}" data-mi="${mi}" title="${esc(r.name)}${r.within ? ', ' + esc(r.within) : ''}">${esc(T.slice(m.s, m.e))}</mark>`;
+    pos = m.e;
+  });
+  html += esc(T.slice(pos));
+  if (S.text.length > MAX_TEXT) html += `\n\n<i>Only the first ${MAX_TEXT.toLocaleString()} characters are shown here. All of the text was searched for places.</i>`;
+  tv.innerHTML = html;
+  updateMnav();
+}
+$('#textView').addEventListener('click', e => { const mk = e.target.closest('mark'); if (!mk) return; const pi = +mk.dataset.pi; const r = S.places.find(x => x.pi === pi); S.curMention = r.occ.indexOf(+mk.dataset.mi); select(pi, 'text'); });
+function updateMnav() {
+  const nav = $('#mnav');
+  const r = S.places.find(x => x.pi === S.selected);
+  if (!r || S.excluded.has(r.pi)) { nav.hidden = true; return; }
+  nav.hidden = false;
+  $('#mnavLabel').textContent = `${r.name}: mention ${S.curMention + 1} of ${r.occ.length}`;
+  document.querySelectorAll('#textView mark.cur').forEach(m => m.classList.remove('cur'));
+  const mk = document.querySelector(`#textView mark[data-mi="${r.occ[S.curMention]}"]`);
+  if (mk) { mk.classList.add('cur'); const tv = $('#textView'); tv.scrollTop = mk.offsetTop - tv.offsetTop - tv.clientHeight / 3; }
+}
+$('#mPrev').onclick = () => { const r = S.places.find(x => x.pi === S.selected); if (!r) return; S.curMention = (S.curMention - 1 + r.occ.length) % r.occ.length; updateMnav(); };
+$('#mNext').onclick = () => { const r = S.places.find(x => x.pi === S.selected); if (!r) return; S.curMention = (S.curMention + 1) % r.occ.length; updateMnav(); };
+
+/* ---------- Selection ---------- */
+function select(pi, from) {
+  if (from !== 'text') S.curMention = 0;
+  S.selected = pi;
+  document.querySelectorAll('#tbl tbody tr').forEach(tr => tr.classList.toggle('sel', +tr.dataset.pi === pi));
+  document.querySelectorAll('#textView mark').forEach(m => m.classList.toggle('sel', +m.dataset.pi === pi));
+  d3.selectAll('#cloudWrap text').classed('sel', w => w && w.d && w.d.pi === pi);
+  highlightMap();
+  updateMnav();
+  const r = S.places.find(x => x.pi === pi);
+  if (r && from !== 'map' && !S.excluded.has(pi)) {
+    // pan to the place if it is off screen
+    const t = d3.zoomTransform(M.svg.node()); const [sx, sy] = t.apply(M.proj([r.lon, r.lat]));
+    if (sx < 30 || sy < 30 || sx > M.W - 30 || sy > M.H - 30) {
+      const k = Math.max(t.k, 3);
+      const p = M.proj([r.lon, r.lat]);
+      (reduceMotion ? M.svg : M.svg.transition().duration(500)).call(M.zoom.transform, d3.zoomIdentity.translate(M.W / 2, M.H / 2).scale(k).translate(-p[0], -p[1]));
+    }
+  }
+  if (from !== 'table') { const tr = document.querySelector(`#tbl tbody tr[data-pi="${pi}"]`); if (tr) tr.scrollIntoView({ block: 'nearest' }); }
+  if (r) setStatus(`${r.name}: ${r.count} mention${r.count === 1 ? '' : 's'}.`);
+}
+
+/* ---------- Exports ---------- */
+function download(name, blob) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+const baseName = () => (S.docName || 'places').replace(/\.[^.]+$/, '').replace(/[^\w\-]+/g, '_').slice(0, 60) || 'places';
+function csvCell(v) { v = String(v ?? ''); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+$('#csvBtn').onclick = () => {
+  if (!S.visible.length) { setStatus('There are no places to download yet.', true); return; }
+  const rows = [['place', 'type', 'within', 'country_code', 'latitude', 'longitude', 'mentions', 'forms_in_text']];
+  for (const r of S.visible) rows.push([r.name, S.gaz.types[r.type], r.within, r.cc, r.lat, r.lon, r.count, [...r.forms].join('; ')]);
+  download(baseName() + '_places.csv', new Blob(['﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n')], { type: 'text/csv' }));
+};
+$('#geoBtn').onclick = () => {
+  if (!S.visible.length) { setStatus('There are no places to download yet.', true); return; }
+  const fc = { type: 'FeatureCollection', features: S.visible.map(r => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [r.lon, r.lat] }, properties: { place: r.name, type: S.gaz.types[r.type], within: r.within, country_code: r.cc, mentions: r.count, forms_in_text: [...r.forms].join('; '), source_document: S.docName } })) };
+  download(baseName() + '_places.geojson', new Blob([JSON.stringify(fc)], { type: 'application/geo+json' }));
+};
+function svgToPng(svgEl, W, H, name, extra) {
+  const clone = svgEl.cloneNode(true);
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  clone.setAttribute('width', W); clone.setAttribute('height', H);
+  if (extra) extra(clone);
+  const data = new XMLSerializer().serializeToString(clone);
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas'); c.width = W * 2; c.height = H * 2;
+    const ctx = c.getContext('2d'); ctx.scale(2, 2); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); ctx.drawImage(img, 0, 0, W, H);
+    ctx.font = '12px system-ui, sans-serif'; ctx.fillStyle = '#56606a'; ctx.textAlign = 'right';
+    ctx.fillText('Places: Natural Earth, GeoNames · Created by Jason Sawle', W - 8, H - 8);
+    c.toBlob(b => download(name, b), 'image/png');
+  };
+  img.onerror = () => setStatus('Could not create the image.', true);
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(data);
+}
+$('#pngMap').onclick = () => {
+  if (!M.svg) return;
+  svgToPng(M.svg.node(), M.W, M.H, baseName() + '_map.png', c => { c.querySelectorAll('[tabindex]').forEach(n => n.removeAttribute('tabindex')); });
+};
+$('#pngCloud').onclick = () => {
+  const s = $('#cloudWrap svg'); if (!s) { setStatus('There is no word cloud to save yet.', true); return; }
+  const vb = s.viewBox.baseVal; svgToPng(s, vb.width, vb.height, baseName() + '_wordcloud.png', c => c.querySelectorAll('title').forEach(t => t.remove()));
+};
+
+/* ================= UI wiring ================= */
+function renderVersions() {
+  $('#appVersion').textContent = 'v' + APP_VERSION;
+  document.querySelectorAll('[data-model]').forEach(el => { const m = MODELS[el.dataset.model]; el.textContent = `${m.name} v${m.v}`; el.title = m.what; });
+  $('#versionRows').innerHTML = `<tr><td><b>Place Finder app</b></td><td>${APP_VERSION}</td><td>The whole app</td></tr>` +
+    Object.values(MODELS).map(m => `<tr><td>${esc(m.name)}</td><td>${esc(m.v)}</td><td>${esc(m.what)}</td></tr>`).join('');
+}
+function buildFilters() {
+  const fs = $('#typeFilter');
+  for (const g of GROUPS) {
+    const id = 'tf-' + g.id;
+    fs.insertAdjacentHTML('beforeend', `<label for="${id}"><input type="checkbox" id="${id}" value="${g.id}" checked><span class="sw" style="background:${g.color}" aria-hidden="true"></span>${esc(g.label)}</label>`);
+  }
+  fs.addEventListener('change', e => { const v = e.target.value; e.target.checked ? S.showGroups.add(v) : S.showGroups.delete(v); renderAll(true); });
+  $('#legend').innerHTML = GROUPS.map(g => `<span><span class="sw" style="background:${g.color}" aria-hidden="true"></span>${esc(g.label)}</span>`).join('') + '<span><span class="sw" style="background:#c5d8e8;border-radius:2px" aria-hidden="true"></span>Country mentioned</span>';
+}
+function buildSamples() {
+  const box = $('#samples');
+  for (const k of Object.keys(SAMPLES)) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = k;
+    b.onclick = () => { if (!S.gaz) return; $('#paste').value = SAMPLES[k]; run(SAMPLES[k], `Example: ${k}`); };
+    box.appendChild(b);
+  }
+}
+$('#runBtn').onclick = () => { const t = $('#paste').value; if (!t.trim()) { setStatus('Paste some text first, or choose a file.', true); $('#paste').focus(); return; } run(t, 'Pasted text'); };
+$('#clearBtn').onclick = () => { $('#paste').value = ''; S.text = ''; S.places = []; S.matches = []; S.selected = null; $('#file').value = ''; $('#textView').innerHTML = '<span style="color:var(--muted)">The document text appears here, with each place name underlined in its type colour.</span>'; $('#mnav').hidden = true; renderAll(true); setStatus('Cleared.'); };
+$('#file').addEventListener('change', e => handleFile(e.target.files[0]));
+const drop = $('#drop');
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => handleFile(e.dataTransfer.files[0]));
+const dlg = $('#about');
+$('#aboutBtn').onclick = () => dlg.showModal();
+$('#aboutClose').onclick = () => dlg.close();
+dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+
+buildFilters(); buildSamples(); renderVersions();
+loadData();
+</script>
+</body>
+</html>
