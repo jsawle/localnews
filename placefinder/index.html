@@ -44,6 +44,8 @@ aside .card + .card{margin-top:16px}
 .drop.over{background:#e8f1f8;border-color:var(--accent)}
 .drop p{margin:6px 0;color:var(--muted);font-size:13px}
 label{font-weight:600;font-size:14px}
+input[type=url]{font:inherit;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-height:36px;background:#fff;color:var(--ink)}
+.drop:focus-within label.btn{outline:3px solid var(--focus);outline-offset:2px}
 textarea{width:100%;min-height:150px;font:inherit;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;resize:vertical;background:#fff;color:var(--ink)}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
 .samples{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
@@ -133,6 +135,14 @@ footer{max-width:1600px;margin:0 auto;padding:0 20px 12px;font-size:12.5px;color
         <p>or drag and drop it here</p>
         <p>Word (.docx), PDF, text (.txt, .md, .csv) or web page (.html)</p>
       </div>
+      <form id="urlForm" style="margin-top:14px" novalidate>
+        <label for="url">Or enter a web page address</label>
+        <div class="row" style="margin-top:4px">
+          <input type="url" id="url" inputmode="url" autocomplete="url" placeholder="https://en.wikipedia.org/wiki/Silk_Road" aria-describedby="urlHelp" style="flex:1;min-width:0">
+          <button type="submit" id="urlBtn" disabled>Read page</button>
+        </div>
+        <p class="note" id="urlHelp">Works with Wikipedia and sites that allow other pages to read them. Many news sites don't; copy and paste their text instead.</p>
+      </form>
       <div style="margin-top:14px">
         <label for="paste">Or paste text</label>
         <textarea id="paste" placeholder="Paste an article, a story, notes, a transcript…"></textarea>
@@ -231,7 +241,7 @@ footer{max-width:1600px;margin:0 auto;padding:0 20px 12px;font-size:12.5px;color
 </div>
 
 <footer>
-  Places: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a> (public domain) and <a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a> (CC BY 4.0). Borders: Natural Earth. Your document is read in your browser and is not uploaded anywhere.
+  Places: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a> (public domain) and <a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a> (CC BY 4.0). Borders: Natural Earth. Your document is read in your browser and is not uploaded anywhere. Web pages are fetched directly from their own site.
 </footer>
 <div class="credit">Created by Jason Sawle</div>
 
@@ -245,13 +255,14 @@ footer{max-width:1600px;margin:0 auto;padding:0 20px 12px;font-size:12.5px;color
       <li>The text is matched against a list of about 35,000 places (a <i>gazetteer</i>): countries, states and provinces, cities and towns with 15,000 or more people, continents, oceans and seas, rivers, lakes, mountains, islands and other physical regions.</li>
       <li>It ignores words that are probably not places, such as people's names (“George Washington”), names that are part of something else (“New York Times”) and ordinary words at the start of a sentence (“Reading the map…”).</li>
       <li>When several places share a name (Paris in France or Texas), it uses the rest of the document to choose: other places in the same country or state, and phrases like “Paris, Texas”.</li>
-      <li>Your document stays in your browser. Nothing is uploaded.</li>
+      <li>Your document stays in your browser. Nothing is uploaded. When you enter a web address, your browser fetches that page (or the Wikipedia article) directly; no other service is involved.</li>
     </ul>
     <h3>Things to check</h3>
     <ul>
       <li>Small villages, neighbourhoods, streets, buildings and parks are not in the gazetteer, so they will not be found.</li>
       <li>Some matches will be wrong. Untick them in the table, or choose a different place under <b>Which place?</b></li>
       <li>Scanned PDFs (pictures of pages) have no text to read. Copy and paste the text instead.</li>
+      <li>Many websites, including most news sites, don't allow other web pages to read them. For those, copy the article text and paste it in. Wikipedia articles are read without their reference lists.</li>
     </ul>
     <h3>Versions</h3>
     <table>
@@ -273,10 +284,10 @@ footer{max-width:1600px;margin:0 auto;padding:0 20px 12px;font-size:12.5px;color
 <script>
 'use strict';
 /* ================= Versions ================= */
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 const MODELS = {
-  reader: { name: 'Document reader', v: '1.0', what: 'Reads Word (.docx), PDF, text and web page files in the browser.' },
-  finder: { name: 'Place finder', v: '1.0', what: 'Matches names in the text against the gazetteer, filters out likely non-places, and chooses between places with the same name.' },
+  reader: { name: 'Document reader', v: '1.1', what: 'Reads Word (.docx), PDF, text and web page files in the browser, and web pages from an address (Wikipedia and sites that allow it).' },
+  finder: { name: 'Place finder', v: '1.1', what: 'Matches names in the text against the gazetteer, filters out likely non-places, and chooses between places with the same name.' },
   gazetteer: { name: 'Gazetteer data', v: '1.0', what: 'About 35,000 places from Natural Earth and GeoNames.' },
   map: { name: 'Map', v: '1.0', what: 'Equal Earth map with circles sized by mentions and mentioned countries shaded.' },
   cloud: { name: 'Word cloud', v: '1.0', what: 'Place names sized by number of mentions.' },
@@ -401,6 +412,81 @@ async function readFile(file) {
   }
   if (['txt', 'md', 'markdown', 'csv', 'text', ''].includes(ext) || file.type.startsWith('text/')) return file.text();
   throw new Error(`Place Finder can't read .${ext} files. Use Word (.docx), PDF, text or HTML, or paste the text.`);
+}
+/* ---------- Web page addresses ---------- */
+const WIKI_CUT = /^==+\s*(See also|References|Notes|Notes and references|Footnotes|Citations|Sources|Bibliography|Further reading|External links|Works cited|Explanatory notes)\s*==+\s*$/im;
+function wikiInfo(u) {
+  const m = u.hostname.match(/^([a-z][a-z\-]*)(?:\.m)?\.wikipedia\.org$/i);
+  if (!m) return null;
+  let title = '';
+  if (u.pathname.startsWith('/wiki/')) title = u.pathname.slice(6);
+  else if (u.searchParams.get('title')) title = u.searchParams.get('title');
+  try { title = decodeURIComponent(title); } catch (e) { }
+  title = title.replace(/_/g, ' ').trim();
+  return title ? { lang: m[1].toLowerCase(), title } : null;
+}
+async function readWikipedia(w) {
+  const api = `https://${w.lang}.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&formatversion=2&origin=*&titles=${encodeURIComponent(w.title)}`;
+  const r = await fetch(api);
+  if (!r.ok) throw new Error(`Wikipedia did not answer (error ${r.status}). Try again in a moment.`);
+  const j = await r.json();
+  const page = j && j.query && j.query.pages && j.query.pages[0];
+  if (!page || page.missing || !page.extract) throw new Error(`Couldn't find the Wikipedia article “${w.title}”. Check the address.`);
+  let text = page.extract;
+  const cut = text.search(WIKI_CUT); if (cut > 0) text = text.slice(0, cut);
+  text = text.replace(/^(==+)\s*(.+?)\s*\1\s*$/gm, '\n$2\n').replace(/\n{3,}/g, '\n\n').trim();
+  return { text, name: `${page.title} (Wikipedia)` };
+}
+function pageText(html, base) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('script,style,noscript,template,svg,nav,header,footer,aside,form,button,iframe,figure figcaption,[role=navigation],[aria-hidden=true],.cookie,.advert,.ad').forEach(n => n.remove());
+  const root = doc.querySelector('article') || doc.querySelector('main,[role=main]') || doc.body;
+  if (!root) return { text: '', title: '' };
+  const parts = [];
+  root.querySelectorAll('h1,h2,h3,h4,p,li,blockquote,td,dd,dt').forEach(el => { if (el.querySelector('p,li')) return; const t = el.textContent.replace(/\s+/g, ' ').trim(); if (t) parts.push(t); });
+  let text = parts.join('\n\n');
+  if (text.length < 200) text = root.textContent.replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n\n').trim();
+  const title = (doc.querySelector('meta[property="og:title"]') || {}).content || (doc.title || '').trim();
+  return { text, title };
+}
+async function readUrl(raw) {
+  let u;
+  try { u = new URL(/^[a-z]+:\/\//i.test(raw) ? raw : 'https://' + raw); } catch (e) { throw new Error('That doesn\'t look like a web address. It should start with https://'); }
+  if (!/^https?:$/.test(u.protocol)) throw new Error('Only web addresses starting with http:// or https:// can be read.');
+  const w = wikiInfo(u);
+  if (w) return readWikipedia(w);
+  let r;
+  try { r = await fetch(u.href, { mode: 'cors', credentials: 'omit', redirect: 'follow' }); }
+  catch (e) { const err = new Error(`${u.hostname} doesn't let other web pages read it. Open the page, copy the text and paste it into the box below.`); err.blocked = true; throw err; }
+  if (!r.ok) throw new Error(`${u.hostname} answered with error ${r.status}. Check the address, or copy and paste the text instead.`);
+  const type = (r.headers.get('content-type') || '').toLowerCase();
+  const fname = decodeURIComponent(u.pathname.split('/').pop() || u.hostname);
+  if (type.includes('pdf') || /\.pdf$/i.test(u.pathname) || type.includes('wordprocessingml') || /\.docx$/i.test(u.pathname)) {
+    const blob = await r.blob();
+    const ext = type.includes('pdf') || /\.pdf$/i.test(u.pathname) ? '.pdf' : '.docx';
+    const file = new File([blob], /\.(pdf|docx)$/i.test(fname) ? fname : fname + ext, { type: blob.type });
+    return { text: await readFile(file), name: file.name };
+  }
+  const body = await r.text();
+  if (type.includes('html') || /^\s*<(!doctype|html)/i.test(body)) { const p = pageText(body, u); return { text: p.text, name: p.title || u.hostname }; }
+  return { text: body, name: fname };
+}
+async function handleUrl(raw) {
+  raw = (raw || '').trim();
+  if (!raw) { setStatus('Enter a web page address first.', true); $('#url').focus(); return; }
+  if (!S.gaz) { setStatus('Place data is still loading. Try again in a moment.', true); return; }
+  setStatus('Reading the web page…');
+  $('#urlBtn').disabled = true;
+  try {
+    const { text, name } = await readUrl(raw);
+    if (!text || text.trim().length < 20) throw Object.assign(new Error('No readable text found on that page. Open it, copy the text and paste it into the box below.'), { blocked: true });
+    $('#paste').value = '';
+    run(text, name, raw);
+  } catch (e) {
+    console.error(e);
+    setStatus(e.message || 'Could not read that page.', true);
+    if (e.blocked) $('#paste').focus();
+  } finally { $('#urlBtn').disabled = false; }
 }
 async function handleFile(file) {
   if (!file) return;
@@ -546,7 +632,8 @@ function resolveAll() {
       g.scored = g.cands.map(ci => {
         const p = P[ci];
         let s = p[6];
-        if (norm(p[0]) === g.key.split(' @')[0]) s += 30; // the place's own name, not an alternative name
+        const bk = g.key.split(' @')[0];
+        if (norm(p[0]) === bk || norm(p[0].replace(/^River /, '').replace(/ (River|Mountains)$/, '')) === bk) s += 30; // the place's own name, not an alternative name
         const others = (ccCount.get(p[4]) || 0) - (own[4] === p[4] ? g.ms.length : 0);
         if (p[4] && others > 0) s += 35 + Math.min(10, others);
         const a1 = a1Of(p);
@@ -575,10 +662,10 @@ function summarise() {
   S.places = [...byPlace.values()];
 }
 
-function run(text, name) {
+function run(text, name, source) {
   if (!S.gaz) return;
   const t0 = performance.now();
-  S.text = text.replace(/\r\n?/g, '\n'); S.docName = name || 'Pasted text';
+  S.text = text.replace(/\r\n?/g, '\n'); S.docName = name || 'Pasted text'; S.source = source || '';
   S.override.clear(); S.excluded.clear(); S.selected = null;
   S.tokens = tokenize(S.text);
   S.matches = findMatches(S.tokens);
@@ -603,8 +690,10 @@ function renderStats() {
   $('#sPlaces').textContent = v.length;
   $('#sMentions').textContent = v.reduce((a, r) => a + r.count, 0);
   $('#sCountries').textContent = new Set(v.map(r => r.cc).filter(Boolean)).size;
-  $('#sDoc').textContent = S.text ? `${S.docName} · ${S.tokens.length.toLocaleString()} words` : 'No document yet';
-  $('#sDoc').title = $('#sDoc').textContent;
+  const sd = $('#sDoc');
+  sd.textContent = S.text ? `${S.docName} · ${S.tokens.length.toLocaleString()} words` : 'No document yet';
+  sd.title = sd.textContent;
+  if (S.text && S.source) { sd.textContent = ''; const a = document.createElement('a'); a.href = /^[a-z]+:\/\//i.test(S.source) ? S.source : 'https://' + S.source; a.target = '_blank'; a.rel = 'noopener'; a.textContent = S.docName; sd.append(a, ` · ${S.tokens.length.toLocaleString()} words`); }
 }
 
 /* ---------- Table ---------- */
@@ -906,7 +995,7 @@ $('#csvBtn').onclick = () => {
 };
 $('#geoBtn').onclick = () => {
   if (!S.visible.length) { setStatus('There are no places to download yet.', true); return; }
-  const fc = { type: 'FeatureCollection', features: S.visible.map(r => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [r.lon, r.lat] }, properties: { place: r.name, type: S.gaz.types[r.type], within: r.within, country_code: r.cc, mentions: r.count, forms_in_text: [...r.forms].join('; '), source_document: S.docName } })) };
+  const fc = { type: 'FeatureCollection', features: S.visible.map(r => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [r.lon, r.lat] }, properties: { place: r.name, type: S.gaz.types[r.type], within: r.within, country_code: r.cc, mentions: r.count, forms_in_text: [...r.forms].join('; '), source_document: S.docName, source_url: S.source || '' } })) };
   download(baseName() + '_places.geojson', new Blob([JSON.stringify(fc)], { type: 'application/geo+json' }));
 };
 function svgToPng(svgEl, W, H, name, extra) {
@@ -960,7 +1049,7 @@ function buildSamples() {
   }
 }
 $('#runBtn').onclick = () => { const t = $('#paste').value; if (!t.trim()) { setStatus('Paste some text first, or choose a file.', true); $('#paste').focus(); return; } run(t, 'Pasted text'); };
-$('#clearBtn').onclick = () => { $('#paste').value = ''; S.text = ''; S.places = []; S.matches = []; S.selected = null; $('#file').value = ''; $('#textView').innerHTML = '<span style="color:var(--muted)">The document text appears here, with each place name underlined in its type colour.</span>'; $('#mnav').hidden = true; renderAll(true); setStatus('Cleared.'); };
+$('#clearBtn').onclick = () => { $('#paste').value = ''; $('#url').value = ''; S.text = ''; S.source = ''; S.places = []; S.matches = []; S.selected = null; $('#file').value = ''; $('#textView').innerHTML = '<span style="color:var(--muted)">The document text appears here, with each place name underlined in its type colour.</span>'; $('#mnav').hidden = true; renderAll(true); setStatus('Cleared.'); };
 $('#file').addEventListener('change', e => handleFile(e.target.files[0]));
 const drop = $('#drop');
 ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
@@ -972,7 +1061,13 @@ $('#aboutClose').onclick = () => dlg.close();
 dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
 
 buildFilters(); buildSamples(); renderVersions();
-loadData();
+$('#urlForm').addEventListener('submit', e => { e.preventDefault(); handleUrl($('#url').value); });
+loadData().then(() => {
+  $('#urlBtn').disabled = !S.gaz;
+  // optional ?url= link, e.g. placefinder/?url=https://en.wikipedia.org/wiki/Silk_Road
+  const q = new URLSearchParams(location.search).get('url');
+  if (q && S.gaz) { $('#url').value = q; handleUrl(q); }
+});
 </script>
 </body>
 </html>
