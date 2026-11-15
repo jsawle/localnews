@@ -298,13 +298,20 @@ def mye(lad, lsoa):
     a = header_frame(xl, s2)
     a["LAD25CD"] = a["Code"].astype(str).replace(LAD_RECODE)
     a = a[a["LAD25CD"].isin(lad["LAD25CD"])]
-    ages = {int(float(c)): c for c in a.columns if re.fullmatch(r"\d+(\.0)?", str(c))}
+    ages = {int(float(str(c).rstrip("+"))): c for c in a.columns if re.fullmatch(r"\d+(\.0)?\+?", str(c))}
     tot = pd.to_numeric(a[pick(a.columns, ["All ages"])], errors="coerce")
     g = pd.DataFrame({"LAD25CD": a["LAD25CD"],
                       "mye25_pct_age0_15": pct(a[[ages[i] for i in range(0, 16)]].apply(pd.to_numeric).sum(axis=1), tot),
                       "mye25_pct_age65p": pct(a[[ages[i] for i in ages if i >= 65]].apply(pd.to_numeric).sum(axis=1), tot),
                       "mye25_pop16_64": a[[ages[i] for i in range(16, 65)]].apply(pd.to_numeric).sum(axis=1)})
     o = o.merge(g, on="LAD25CD", how="left")
+    s6 = next(s_ for s_ in xl.sheet_names if s_.upper().startswith("MYE6"))
+    m6 = header_frame(xl, s6)
+    m6["LAD25CD"] = m6["Code"].astype(str).replace(LAD_RECODE)
+    o = o.merge(pd.DataFrame({"LAD25CD": m6["LAD25CD"],
+                              "mye25_median_age": pd.to_numeric(m6["Mid-2025"], errors="coerce")}),
+                on="LAD25CD", how="left")
+    field("mye25_median_age", "Median age, mid-2025", "mye2025", {"lad"})
     lad = lad.merge(o, on="LAD25CD", how="left")
     for k, a_ in {"mye25_pop": "Population mid-2025 (ONS estimate)", "mye24_pop": "Population mid-2024 (ONS estimate)",
                   "mye21_pop": "Population mid-2021 (ONS estimate)", "mye25_density": "Residents per km², mid-2025",
@@ -317,105 +324,69 @@ def mye(lad, lsoa):
 
 
 # ------------------------------------------------------------------ Community and Engagement Survey 2025/26
-# measure field -> (file key, regex matched against the table title/notes text)
-CES_MEASURES = {
-    "ces_civic_any": ("civic", r"civic engagement"),
-    "ces_civic_part": ("civic", r"civic participation"),
-    "ces_civic_cons": ("civic", r"civic consultation"),
-    "ces_civic_act": ("civic", r"civic activism"),
-    "ces_influence": ("decisions", r"(can )?personally influence"),
-    "ces_involve": ("decisions", r"more involved"),
-    "ces_vol_formal": ("volunteering", r"formal volunteering.*(once a month|monthly)"),
-    "ces_belong": ("neighbourhood", r"belong"),
-    "ces_trust": ("neighbourhood", r"trust"),
+# field -> (file key, sheet, alias). Tables are DCMS's district tables (LAD25 codes, 2025/26 columns).
+CES_TABLES = {
+    "ces_civic_any": ("civic", "A12", "% any civic engagement (participation, consultation or activism), last 12 months"),
+    "ces_civic_part": ("civic", "A3", "% civic participation, last 12 months"),
+    "ces_civic_cons": ("civic", "A6", "% civic consultation, last 12 months"),
+    "ces_civic_act": ("civic", "A9", "% civic activism, last 12 months"),
+    "ces_influence": ("decisions", "B3", "% agree they can personally influence local decisions"),
+    "ces_involve": ("decisions", "B8", "% would like more involvement in council decisions"),
+    "ces_belong": ("neighbourhood", "D3", "% strong sense of belonging to neighbourhood"),
+    "ces_trust": ("neighbourhood", "D12", "% say many people in neighbourhood can be trusted"),
+    "ces_news_use": ("neighbourhood", "D21", "% who watch, read or listen to local news at all"),
+    "ces_news_unaware": ("neighbourhood", "D23", "% who don't know any local news providers"),
+    "ces_vol_formal": ("volunteering", "G3", "% formal volunteering at least once a month"),
 }
-CES_ALIAS = {"ces_civic_any": "% any civic engagement in last 12 months",
-             "ces_civic_part": "% civic participation in last 12 months",
-             "ces_civic_cons": "% civic consultation in last 12 months",
-             "ces_civic_act": "% civic activism in last 12 months",
-             "ces_influence": "% agree they can influence local decisions",
-             "ces_involve": "% want more involvement in council decisions",
-             "ces_vol_formal": "% formal volunteering at least once a month",
-             "ces_belong": "% feel they belong to their neighbourhood",
-             "ces_trust": "% say many people in neighbourhood can be trusted"}
 
 
-def find_header(raw, first):
-    """Nearest row above `first` that looks like a header: 3+ cells, mostly text, no area codes."""
-    for h in range(first - 1, -1, -1):
-        row = [v for v in raw.iloc[h].tolist() if str(v) != "nan" and str(v).strip()]
-        if len(row) < 3:
-            continue
-        numeric = sum(1 for v in row if re.fullmatch(r"-?[\d.,]+%?", str(v).strip()))
-        if numeric / len(row) < 0.3 and not any(re.fullmatch(r"E\d{8}", str(v)) for v in row):
-            return h
-    raise KeyError("no header row found")
-
-
-def ces_tables(path):
-    """Yield (sheet, title_text, DataFrame) for every sheet holding LA-coded rows."""
-    xl = pd.ExcelFile(path, engine="odf")
-    for s in xl.sheet_names:
-        raw = xl.parse(s, header=None)
-        is_code = raw.astype(str).apply(lambda c: c.str.match(r"^E0[6-9]\d{6}$"))
-        if is_code.values.sum() < 200:
-            continue
-        code_col = is_code.sum().idxmax()
-        first = is_code[code_col].idxmax()
-        hdr = find_header(raw, first)
-        title = " ".join(str(v) for v in raw.iloc[:max(hdr, 1)].values.ravel() if str(v) != "nan")
-        df = raw.iloc[hdr + 1:].copy()
-        df.columns = [str(v).strip() for v in raw.iloc[hdr]]
-        df = df.rename(columns={df.columns[code_col]: "code"})
-        yield s, title, df
+def ces_table(path, sheet):
+    raw = pd.read_excel(path, sheet_name=sheet, header=None, engine="odf")
+    h = next(i for i in range(min(20, len(raw)))
+             if any(str(v).strip().lower().startswith("percentage 2025/26") for v in raw.iloc[i].tolist()))
+    cols = [str(v).strip() for v in raw.iloc[h].tolist()]
+    df = raw.iloc[h + 1:].copy()
+    df.columns = cols
+    est = pick(cols, ["Percentage 2025/26"], exclude=["Lower", "Upper"])
+    lo = pick(cols, ["Lower", "2025/26"])
+    hi = pick(cols, ["Upper", "2025/26"])
+    base = pick(cols, ["Unweighted base", "2025/26"])
+    first = df.iloc[0]   # first row after the header is England
+    eng = (float(pd.to_numeric(first[est], errors="coerce")), float(pd.to_numeric(first[lo], errors="coerce")),
+           float(pd.to_numeric(first[hi], errors="coerce")))
+    t = df[df["LAD25 code"].astype(str).str.match(r"^E0[6-9]\d{6}$")]
+    out = pd.DataFrame({"LAD25CD": t["LAD25 code"].astype(str).replace(LAD_RECODE),
+                        "est": pd.to_numeric(t[est], errors="coerce"),
+                        "lo": pd.to_numeric(t[lo], errors="coerce"),
+                        "hi": pd.to_numeric(t[hi], errors="coerce"),
+                        "base": pd.to_numeric(t[base], errors="coerce")})
+    return out, eng
 
 
 def ces(lad, lsoa):
     files = {k: f"ces2526_{k}.ods" for k in ("civic", "decisions", "neighbourhood", "volunteering")}
     if not have(*files.values()):
         return lad, lsoa
-    out = pd.DataFrame({"LAD25CD": lad["LAD25CD"]})
-    found = {}
-    for fkey, fname in files.items():
-        for s, title, df in ces_tables(RAW / fname):
-            for m, (k, rx) in CES_MEASURES.items():
-                if k != fkey or m in found or not re.search(rx, f"{s} {title}", re.I):
-                    continue
-                cols = list(df.columns)
-                try:
-                    est = pick(cols, ["%"], exclude=["lower", "upper", "confidence", "base"]) \
-                        if any("%" in c for c in cols) else pick(cols, ["estimate"])
-                    lo = pick(cols, ["lower"])
-                    hi = pick(cols, ["upper"])
-                except KeyError as e:
-                    WARN.append(f"CES {m} in sheet {s}: {e}")
-                    continue
-                t = df[["code", est, lo, hi]].copy()
-                t.columns = ["code", "est", "lo", "hi"]
-                for c in ("est", "lo", "hi"):
-                    t[c] = pd.to_numeric(t[c], errors="coerce")
-                scale = 100 if t["est"].max() <= 1 else 1
-                t[["est", "lo", "hi"]] *= scale
-                eng = df[df.astype(str).apply(lambda r: r.str.fullmatch(r"England").any(), axis=1)]
-                eng_val = pd.to_numeric(eng[est], errors="coerce").dropna()
-                eng_val = eng_val.iloc[0] * scale if len(eng_val) else None
-                t["LAD25CD"] = t["code"].replace(LAD_RECODE)
-                t = t[t["LAD25CD"].isin(lad["LAD25CD"])].drop_duplicates("LAD25CD")
-                out = out.merge(t[["LAD25CD", "est"]].rename(columns={"est": m}).assign(**{m: lambda x: x[m].round(1)}),
-                                on="LAD25CD", how="left")
-                if eng_val is not None:
-                    sig = pd.Series("In line with England", index=t.index)
-                    sig[t["lo"] > eng_val] = "Above England"
-                    sig[t["hi"] < eng_val] = "Below England"
-                    out = out.merge(pd.DataFrame({"LAD25CD": t["LAD25CD"], f"{m}_sig": sig}), on="LAD25CD", how="left")
-                    field(f"{m}_sig", f"{CES_ALIAS[m]}: compared with England (95% CI)", "ces2526", {"lad"})
-                field(m, f"{CES_ALIAS[m]}, CES 2025/26", "ces2526", {"lad"})
-                found[m] = f"{fname} / {s}"
-                log(f"CES {m} <- {fname} sheet {s} ({t['est'].notna().sum()} LAs, England {eng_val})")
-    for m in CES_MEASURES:
-        if m not in found:
-            WARN.append(f"CES measure not found: {m}")
-    lad = lad.merge(out, on="LAD25CD", how="left")
+    for m, (fkey, sheet, alias) in CES_TABLES.items():
+        try:
+            t, eng = ces_table(RAW / files[fkey], sheet)
+        except Exception as e:  # noqa: BLE001
+            WARN.append(f"CES {m} ({files[fkey]} {sheet}): {e}")
+            continue
+        # DCMS's rule: different from England only where the two 95% confidence intervals don't overlap
+        e_est, e_lo, e_hi = eng
+        sig = pd.Series("In line with England", index=t.index)
+        sig[t["lo"] > e_hi] = "Above England"
+        sig[t["hi"] < e_lo] = "Below England"
+        o = pd.DataFrame({"LAD25CD": t["LAD25CD"], m: t["est"].round(1), f"{m}_sig": sig})
+        if m == "ces_civic_any":
+            o["ces_base"] = t["base"]
+            field("ces_base", "Survey respondents in district (unweighted base, CES 2025/26)", "ces2526", {"lad"})
+        lad = lad.merge(o.drop_duplicates("LAD25CD"), on="LAD25CD", how="left")
+        field(m, f"{alias}, CES 2025/26", "ces2526", {"lad"})
+        field(f"{m}_sig", f"{alias}: compared with England {e_est:.1f}% (95% CIs don't overlap)", "ces2526", {"lad"})
+        log(f"CES {m} <- {sheet}: {t['est'].notna().sum()} districts, England {e_est:.1f}%, "
+            f"above {int((sig == 'Above England').sum())}, below {int((sig == 'Below England').sum())}")
     return lad, lsoa
 
 
@@ -451,57 +422,42 @@ def ge2024(lad, lsoa):
 
 
 # ------------------------------------------------------------------ Business counts (ONS ASL 2026)
+def asl_table(xl, number):
+    sheet = next(s_ for s_ in xl.sheet_names if s_.strip() == f"Table {number}")
+    raw = xl.parse(sheet, header=None)
+    h = next(i for i in range(min(15, len(raw)))
+             if {"0-4", "Total"} <= {str(v).strip() for v in raw.iloc[i].tolist()})
+    cols = ["area"] + [str(v).strip() for v in raw.iloc[h].tolist()[1:]]
+    df = raw.iloc[h + 1:].copy()
+    df.columns = cols
+    df["code"] = df["area"].astype(str).str.extract(r"^([EWSNK]\d{8})\s*:")[0]
+    df = df[df["code"].notna()].copy()
+    df["LAD25CD"] = df["code"].replace(LAD_RECODE)
+    for c in ["0-4", "5-9", "10-19", "20-49", "50-99", "100-249", "250+", "Total"]:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    return df.drop_duplicates("LAD25CD")
+
+
 def business(lad, lsoa):
     if not have("asl2026.xlsx"):
         return lad, lsoa
     xl = pd.ExcelFile(RAW / "asl2026.xlsx")
-    ent = loc = None
-    for s in xl.sheet_names:
-        raw = xl.parse(s, header=None, nrows=8)
-        title = " ".join(str(v) for v in raw.values.ravel() if str(v) != "nan").lower()
-        if "employment size" in title and ("district" in title or "local authorit" in title):
-            if "enterprise" in title and ent is None:
-                ent = s
-            elif "local unit" in title and loc is None:
-                loc = s
-    log("ASL sheets: enterprises", ent, "| local units", loc)
-    if not ent:
-        WARN.append("ASL: no enterprises-by-size-by-district sheet found; check _inspect.txt")
-        return lad, lsoa
-
-    def size_table(sheet):
-        raw = xl.parse(sheet, header=None)
-        is_code = raw.astype(str).apply(lambda c: c.str.match(r"^E0[6-9]\d{6}$"))
-        code_col = is_code.sum().idxmax()
-        first = is_code[code_col].idxmax()
-        hdr = find_header(raw, first)
-        df = raw.iloc[hdr + 1:].copy()
-        df.columns = [str(v).strip() for v in raw.iloc[hdr]]
-        df = df.rename(columns={df.columns[code_col]: "code"})
-        df["LAD25CD"] = df["code"].astype(str).replace(LAD_RECODE)
-        return df[df["LAD25CD"].isin(lad["LAD25CD"])].drop_duplicates("LAD25CD")
-
-    e = size_table(ent)
-    tot = pd.to_numeric(e[pick(e.columns, ["Total"])], errors="coerce")
-    micro_cols = [c for c in e.columns if re.match(r"^0\s*-\s*4$|^5\s*-\s*9$", c.replace("to", "-"))]
-    o = pd.DataFrame({"LAD25CD": e["LAD25CD"], "bus_enterprises": tot})
-    if micro_cols:
-        o["bus_pct_micro"] = pct(e[micro_cols].apply(pd.to_numeric, errors="coerce").sum(axis=1), tot)
-        field("bus_pct_micro", "% of enterprises with 0–9 employees, March 2026", "business2026", {"lad"})
-    else:
-        WARN.append(f"ASL: micro size-band columns not found in {list(e.columns)}")
-    if loc:
-        l = size_table(loc)
-        o = o.merge(pd.DataFrame({"LAD25CD": l["LAD25CD"],
-                                  "bus_local_units": pd.to_numeric(l[pick(l.columns, ["Total"])], errors="coerce")}),
-                    on="LAD25CD", how="left")
-        field("bus_local_units", "Business local units (VAT/PAYE), March 2026", "business2026", {"lad"})
+    e = asl_table(xl, 10)   # enterprises by district and employment size band
+    u = asl_table(xl, 22)   # local units by district and employment size band
+    o = pd.DataFrame({"LAD25CD": e["LAD25CD"], "bus_enterprises": e["Total"],
+                      "bus_pct_micro": pct(e["0-4"] + e["5-9"], e["Total"])})
+    o = o.merge(pd.DataFrame({"LAD25CD": u["LAD25CD"], "bus_local_units": u["Total"]}), on="LAD25CD", how="left")
     lad = lad.merge(o, on="LAD25CD", how="left")
-    den = lad["mye25_pop16_64"] if "mye25_pop16_64" in lad else None
-    if den is not None:
-        lad["bus_ent_per1k_16_64"] = (1000 * lad["bus_enterprises"] / den).round(1)
-        field("bus_ent_per1k_16_64", "Enterprises per 1,000 residents aged 16–64 (2026 / mid-2025)", "business2026", {"lad"})
+    missing = lad["bus_enterprises"].isna().sum()
+    if missing:
+        WARN.append(f"ASL: {missing} districts without enterprise counts")
     field("bus_enterprises", "VAT/PAYE enterprises, March 2026", "business2026", {"lad"})
+    field("bus_pct_micro", "% of enterprises with 0–9 employees, March 2026", "business2026", {"lad"})
+    field("bus_local_units", "VAT/PAYE business local units, March 2026", "business2026", {"lad"})
+    if "mye25_pop16_64" in lad:
+        lad["bus_ent_per1k_16_64"] = (1000 * lad["bus_enterprises"] / lad["mye25_pop16_64"]).round(1)
+        field("bus_ent_per1k_16_64", "Enterprises per 1,000 residents aged 16–64 (March 2026 / mid-2025)",
+              "business2026", {"lad"})
     return lad, lsoa
 
 
@@ -547,39 +503,45 @@ def ofcom(lad, lsoa):
     lad = lad.merge(by_lad[["LAD25CD"] + keep], on="LAD25CD", how="left")
 
     # LA-only files: full fibre coverage/take-up and mobile coverage
-    la_cols = {}
-    for p in sorted(RAW.rglob("*laua*.csv")):
-        la = pd.read_csv(p, encoding="utf-8-sig", low_memory=False)
-        lc = pick(la.columns, ["laua"], exclude=["name"])
-        la["LAD25CD"] = la[lc].astype(str).replace(LAD_RECODE)
-        la = la[la["LAD25CD"].isin(lad["LAD25CD"])]
-        if "full_fibre_take" in p.name or "take-up" in p.name:
-            try:
-                c = pick(la.columns, ["take-up"])
-                la_cols["ofc_ff_takeup"] = (la[["LAD25CD", c]], "Full-fibre take-up, % of premises with full-fibre coverage")
-            except KeyError as e:
-                WARN.append(f"Ofcom take-up: {e}")
-        elif "fixed" in p.name and "_res_" not in p.name:
-            try:
-                c = pick(la.columns, ["Full Fibre", "%"])
-                la_cols["ofc_pct_fullfibre"] = (la[["LAD25CD", c]], "% premises with full-fibre coverage")
-            except KeyError as e:
-                WARN.append(f"Ofcom full fibre: {e}")
-        elif "mobile" in p.name:
-            (RAW / "_ofcom_mobile_columns.txt").write_text("\n".join(la.columns))
-            for m, must, alias in [("ofc_4g_in_all", ["4G", "prem", "in", "4"], "% premises with indoor 4G from all 4 operators"),
-                                   ("ofc_4g_geo_all", ["4G", "geo", "4"], "% geographic area with outdoor 4G from all 4 operators"),
-                                   ("ofc_5g_out_any", ["5G", "prem", "out", "1"], "% premises with outdoor 5G from at least one operator")]:
-                try:
-                    c = pick(la.columns, must)
-                    la_cols[m] = (la[["LAD25CD", c]], alias)
-                except KeyError as e:
-                    WARN.append(f"Ofcom mobile {m}: {e}")
-    for m, (df, alias) in la_cols.items():
-        df = df.rename(columns={df.columns[1]: m})
-        df[m] = pd.to_numeric(df[m], errors="coerce").round(1)
-        lad = lad.merge(df.drop_duplicates("LAD25CD"), on="LAD25CD", how="left")
-        field(m, f"{alias}, Ofcom Jan 2026", "ofcom2026", {"lad"})
+    def la_file(pattern):
+        p = sorted(RAW.rglob(pattern))
+        if not p:
+            WARN.append(f"Ofcom: no file {pattern}")
+            return None
+        d = pd.read_csv(p[0], encoding="utf-8-sig", low_memory=False)
+        d["LAD25CD"] = d["laua"].astype(str).replace(LAD_RECODE)
+        return d[d["LAD25CD"].isin(lad["LAD25CD"])].drop_duplicates("LAD25CD")
+
+    num = lambda s_: pd.to_numeric(s_, errors="coerce")  # noqa: E731
+    o = pd.DataFrame({"LAD25CD": lad["LAD25CD"]})
+    fx = la_file("*fixed_laua_coverage_r*.csv")
+    if fx is not None:
+        o = o.merge(pd.DataFrame({"LAD25CD": fx["LAD25CD"],
+                                  "ofc_pct_fullfibre": num(fx["Full Fibre availability (% premises)"]).round(1)}),
+                    on="LAD25CD", how="left")
+        field("ofc_pct_fullfibre", "% premises with full-fibre coverage, Ofcom Jan 2026", "ofcom2026", {"lad"})
+    tu = la_file("*full_fibre_take-up_laua*.csv")
+    if tu is not None:
+        o = o.merge(pd.DataFrame({"LAD25CD": tu["LAD25CD"],
+                                  "ofc_ff_takeup": num(tu["Full-fibre take-up (% of full-fibre coverage)"])}),
+                    on="LAD25CD", how="left")
+        field("ofc_ff_takeup", "Full-fibre take-up, % of premises that can get it, Ofcom Jan 2026", "ofcom2026", {"lad"})
+    mb = la_file("*mobile_coverage_laua*.csv")
+    if mb is not None:
+        # Columns give the % of premises/area covered by exactly 0,1,2,3,4 operators; blanks are 0.
+        g = lambda c: num(mb[c]).fillna(0)  # noqa: E731
+        o = o.merge(pd.DataFrame({"LAD25CD": mb["LAD25CD"],
+                                  "ofc_4g_in_none": g("4G_prem_in_0").round(2),
+                                  "ofc_4g_in_all": g("4G_prem_in_4").round(1),
+                                  "ofc_4g_geo_all": g("4G_geo_out_4").round(1),
+                                  "ofc_5g_out_any": (100 - g("5G_high_confidence_prem_out_0")).round(1)}),
+                    on="LAD25CD", how="left")
+        for k, a in {"ofc_4g_in_none": "% premises with no indoor 4G from any operator",
+                     "ofc_4g_in_all": "% premises with indoor 4G from all four operators",
+                     "ofc_4g_geo_all": "% land area with outdoor 4G from all four operators",
+                     "ofc_5g_out_any": "% premises with outdoor 5G (high confidence) from at least one operator"}.items():
+            field(k, f"{a}, Ofcom Jan 2026", "ofcom2026", {"lad"})
+    lad = lad.merge(o, on="LAD25CD", how="left")
     return lad, lsoa
 
 
