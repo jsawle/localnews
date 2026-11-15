@@ -17,6 +17,7 @@ pip install pandas requests openpyxl odfpy arcgis
 python scripts/fetch.py           # downloads into data/raw (cached)
 python scripts/inspect_raw.py     # optional: dump headers of every download to data/raw/_inspect.txt
 python scripts/build.py           # writes data/out/*.geojson, *.csv, fields.json
+python scripts/local_elections.py  # local election turnout by year; needs data/raw/leh/leh_2021..2025.xlsx
 python scripts/pinf.py            # PINF news layers; needs data/raw/pinf_2025.xlsx (not redistributed)
 python scripts/publish.py --profile g4s-publisher   # publish or overwrite, share publicly
 ```
@@ -57,6 +58,16 @@ Live on GIS-4-Schools (folder *News desert programme*, owner Si_Claudius), share
 | GE 2024 turnout by constituency | [ba8ea457…](https://gis-4-schools.maps.arcgis.com/home/item.html?id=ba8ea457f54a49f7936d5e3a35ab10ba) | `https://services4.arcgis.com/HNLEA4GfnbCFQZGa/arcgis/rest/services/news_desert_ge2024_turnout_england/FeatureServer/0` |
 
 The source GeoJSON items sit in the same folder, unshared, so the layers can be overwritten in place. The built files, field aliases and item descriptions are on the `news-desert-data` branch (`publish_manifest.json`).
+
+### Local election turnout by year (public)
+
+Built by `scripts/local_elections.py` from the House of Commons Library / Elections Centre Local Elections Handbook datasets for May 2021 to May 2025 (ward-level electorate and turnout, Open Parliament Licence). The 2026 dataset was not yet published in November 2026.
+
+Layer: [7433402d…](https://gis-4-schools.maps.arcgis.com/home/item.html?id=7433402db5db430fb87ba264256aa89b), `https://services4.arcgis.com/HNLEA4GfnbCFQZGa/arcgis/rest/services/news_desert_local_election_turnout_england/FeatureServer/0`
+
+Districts vote in different years, so the year is in every field: `le2021_turnout` … `le2025_turnout` (with `_type` and `_electorate`), `le_latest_turnout` + `le_latest_year` + `le_latest_type` + `le_latest_label`, and `le_own_*` (excluding county council elections). `le_relative_turnout` is each election's gap to the same-year, same-tier median, averaged, for comparing districts that voted in different years. County divisions are assigned to their district. Version: `LE_VERSION` (1.0.0). The web map (v1.1.0) has one layer per year.
+
+`analysis/correlate.py` is the district-level correlation analysis of PINF provision against the supplementary data.
 
 ### PINF local news layers (private)
 
