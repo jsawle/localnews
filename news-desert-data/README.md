@@ -17,6 +17,7 @@ pip install pandas requests openpyxl odfpy arcgis
 python scripts/fetch.py           # downloads into data/raw (cached)
 python scripts/inspect_raw.py     # optional: dump headers of every download to data/raw/_inspect.txt
 python scripts/build.py           # writes data/out/*.geojson, *.csv, fields.json
+python scripts/pinf.py            # PINF news layers; needs data/raw/pinf_2025.xlsx (not redistributed)
 python scripts/publish.py --profile g4s-publisher   # publish or overwrite, share publicly
 ```
 
@@ -56,6 +57,18 @@ Live on GIS-4-Schools (folder *News desert programme*, owner Si_Claudius), share
 | GE 2024 turnout by constituency | [ba8ea457…](https://gis-4-schools.maps.arcgis.com/home/item.html?id=ba8ea457f54a49f7936d5e3a35ab10ba) | `https://services4.arcgis.com/HNLEA4GfnbCFQZGa/arcgis/rest/services/news_desert_ge2024_turnout_england/FeatureServer/0` |
 
 The source GeoJSON items sit in the same folder, unshared, so the layers can be overwritten in place. The built files, field aliases and item descriptions are on the `news-desert-data` branch (`publish_manifest.json`).
+
+### PINF local news layers (private)
+
+Built by `scripts/pinf.py` from the PINF Local News Database, December 2025 (`data/raw/pinf_2025.xlsx`, supplied by hand). PINF states no licence for this data, so the file and its outputs are **not** committed here or on the `news-desert-data` branch, and the layers stay private until PINF confirms reuse terms.
+
+| Layer | Item | Notes |
+| --- | --- | --- |
+| Local news provision by district | [fb047184…](https://gis-4-schools.maps.arcgis.com/home/item.html?id=fb04718405114d79ad16ee16a5ee633b) | 296 districts; PINF counts, outlets per 100,000, desert/dryland/oasis class, monopoly, launch/closure flags |
+| Local news outlets | [1d0fc1a5…](https://gis-4-schools.maps.arcgis.com/home/item.html?id=1d0fc1a5f24a4d6fb0ee4561b8ce7194) | 968 outlets as 1,040 points, one per district served |
+| Web map | [75957fe0…](https://gis-4-schools.maps.arcgis.com/home/item.html?id=75957fe0270641aea2ba352a049d5d13) | PINF layers plus IMD 2025 and GE 2024 turnout context |
+
+PINF's `LOCATION` is often a publisher's office (only 58% of English outlets sit inside a district they cover), so each outlet point is drawn in the district it serves: at `LOCATION` when that is inside the district, otherwise on a grid near the district centre. The `position` field records which. PINF version: `PINF_VERSION` in `scripts/pinf.py` (1.0.0).
 
 ## Licences
 
