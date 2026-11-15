@@ -42,8 +42,20 @@ Business demography (births, deaths, survival) is not included yet.
 - District vintage is May 2025. Sources keyed on 2023/2024 codes recode Barnsley (E08000016 → E08000038) and Sheffield (E08000019 → E08000039).
 - Census counts are summed from LSOA to district before rates are calculated. District density = residents ÷ (sum of LSOA areas implied by TS006).
 - GE 2024 district turnout is an estimate: each LSOA takes its best-fit constituency's turnout, weighted by residents aged 16+.
-- CES `_sig` fields compare each district's 95% confidence interval with the England figure.
+- CES `_sig` fields use the DCMS rule: a district is above or below England only when its 95% confidence interval does not overlap England's.
 - Ofcom OA percentages are converted to premises counts, summed, then turned back into percentages.
+
+## Published layers
+
+Live on GIS-4-Schools (folder *News desert programme*, owner Si_Claudius), shared publicly, query-only, Web Mercator. Published 15 November 2026 from data build v1.0.0.
+
+| Layer | Item | Feature service |
+| --- | --- | --- |
+| Districts (tier 1) | [6b694dd4…](https://gis-4-schools.maps.arcgis.com/home/item.html?id=6b694dd490694ee2a0e4c4b3f76b63d8) | `https://services4.arcgis.com/HNLEA4GfnbCFQZGa/arcgis/rest/services/news_desert_districts_england/FeatureServer/0` |
+| Neighbourhoods, LSOA (tier 2) | [0f15224a…](https://gis-4-schools.maps.arcgis.com/home/item.html?id=0f15224ae9f443359cdeb1cc9c609ddb) | `https://services4.arcgis.com/HNLEA4GfnbCFQZGa/arcgis/rest/services/news_desert_lsoa_england/FeatureServer/0` |
+| GE 2024 turnout by constituency | [ba8ea457…](https://gis-4-schools.maps.arcgis.com/home/item.html?id=ba8ea457f54a49f7936d5e3a35ab10ba) | `https://services4.arcgis.com/HNLEA4GfnbCFQZGa/arcgis/rest/services/news_desert_ge2024_turnout_england/FeatureServer/0` |
+
+The source GeoJSON items sit in the same folder, unshared, so the layers can be overwritten in place. The built files, field aliases and item descriptions are on the `news-desert-data` branch (`publish_manifest.json`).
 
 ## Licences
 
