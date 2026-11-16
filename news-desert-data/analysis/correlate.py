@@ -18,7 +18,7 @@ X = {  # explanatory measures
     "ces_involve": "Want more involvement", "ces_belong": "Belong to neighbourhood", "ces_trust": "Trust people in neighbourhood",
     "ces_vol_formal": "Formal volunteering", "ces_news_use": "Use local news at all", "ces_news_unaware": "Know no local news provider",
     "deprivation": "Deprivation (IMD 2025)", "log_density": "Population density", "log_pop": "Population",
-    "mye25_median_age": "Median age", "cen21_pct_age65p": "% aged 65+", "cen21_pct_not_wbrit": "% not White British",
+    "mye25_median_age": "Median age", "mye25_pct_age65p": "% aged 65+", "cen21_pct_not_wbrit": "% not White British",
     "cen21_pct_noqual": "% no qualifications", "cen21_pct_level4": "% degree-level", "cen21_unemp_rate": "Unemployment",
     "cen21_pct_bad_health": "% bad health", "mye_chg_21_25_pct": "Population growth 2021–25",
     "bus_ent_per1k_16_64": "Businesses per 1,000 aged 16–64", "ofc_pct_gigabit": "Gigabit broadband", "ofc_4g_geo_all": "4G all-operator area"}
